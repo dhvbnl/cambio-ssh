@@ -186,10 +186,15 @@ func (m GameModel) View() tea.View {
 		Bold(true).
 		Foreground(lipgloss.Color("6")).
 		MarginBottom(1)
-	userStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	title := titleStyle.Render("BLACKJACK")
 	content.WriteString(title)
 	content.WriteString("\n")
+
+	// Card box styling
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("8")).
+		Padding(0, 1)
 
 	switch m.state {
 	case StateInitial:
@@ -202,26 +207,30 @@ func (m GameModel) View() tea.View {
 		playerCards := m.game.PlayerHand()
 		playerScore := m.game.PlayerScore()
 
-		content.WriteString("┌─────────────────────────────────────────────────┐\n")
-		content.WriteString("│ DEALER'S HAND                                   │\n")
-		content.WriteString("├─────────────────────────────────────────────────┤\n")
 		dealerDisplay := formatCards([]cards.Card{dealerCard})
-		content.WriteString(fmt.Sprintf("│ %s\n", padString(dealerDisplay, 47)))
-		content.WriteString(fmt.Sprintf("│ Score: %s\n", padString(fmt.Sprintf("%d", dealerCard.Rank), 29)))
-		content.WriteString("└─────────────────────────────────────────────────┘\n\n")
+		dealerScoreStr := fmt.Sprintf("Score: %d", dealerCard.Rank)
+		dealerBox := boxStyle.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			"DEALER'S HAND",
+			dealerDisplay,
+			dealerScoreStr,
+		))
+		content.WriteString(dealerBox)
+		content.WriteString("\n\n")
 
-		content.WriteString("┌─────────────────────────────────────────────────┐\n")
-		content.WriteString("│ " + userStyle.Render("YOUR HAND") + "                                       │\n")
-		content.WriteString("├─────────────────────────────────────────────────┤\n")
 		playerDisplay := formatCards(playerCards)
-		content.WriteString(fmt.Sprintf("│ %s\n", padString(playerDisplay, 47)))
-
 		scoreStr := fmt.Sprintf("Score: %d", playerScore)
 		if playerScore > 21 {
 			scoreStr += " (BUST!)"
 		}
-		content.WriteString(fmt.Sprintf("│ %s\n", padString(scoreStr, 47)))
-		content.WriteString("└─────────────────────────────────────────────────┘\n\n")
+		playerBox := boxStyle.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			"YOUR HAND",
+			playerDisplay,
+			scoreStr,
+		))
+		content.WriteString(playerBox)
+		content.WriteString("\n\n")
 
 		content.WriteString("Choose your action:\n")
 		hitStyle := lipgloss.NewStyle().
@@ -238,22 +247,27 @@ func (m GameModel) View() tea.View {
 		dealerCards, _ := m.game.DealerHand()
 		playerCards := m.game.PlayerHand()
 
-		content.WriteString("┌─────────────────────────────────────────────────┐\n")
-		content.WriteString("│ DEALER'S HAND                                   │\n")
-		content.WriteString("├─────────────────────────────────────────────────┤\n")
 		dealerDisplay := formatCards(dealerCards)
-		content.WriteString(fmt.Sprintf("│ %s\n", padString(dealerDisplay, 38)))
-		content.WriteString(fmt.Sprintf("│ Score: %s\n", padString(fmt.Sprintf("%d", m.game.DealerScore()), 40)))
-		content.WriteString("└─────────────────────────────────────────────────┘\n\n")
+		dealerScoreStr := fmt.Sprintf("Score: %d", m.game.DealerScore())
+		dealerBox := boxStyle.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			"DEALER'S HAND",
+			dealerDisplay,
+			dealerScoreStr,
+		))
+		content.WriteString(dealerBox)
+		content.WriteString("\n\n")
 
-		content.WriteString("┌─────────────────────────────────────────────────┐\n")
-		content.WriteString("│ " + userStyle.Render("YOUR HAND") + "                                       │\n")
-		content.WriteString("├─────────────────────────────────────────────────┤\n")
 		playerDisplay := formatCards(playerCards)
-		content.WriteString(fmt.Sprintf("│ %s\n", padString(playerDisplay, 47)))
-		scoreStr := fmt.Sprintf("Score: %d", m.game.PlayerScore())
-		content.WriteString(fmt.Sprintf("│ %s\n", padString(scoreStr, 47)))
-		content.WriteString("└─────────────────────────────────────────────────┘\n\n")
+		playerScoreStr := fmt.Sprintf("Score: %d", m.game.PlayerScore())
+		playerBox := boxStyle.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			"YOUR HAND",
+			playerDisplay,
+			playerScoreStr,
+		))
+		content.WriteString(playerBox)
+		content.WriteString("\n\n")
 
 		// Determine winner
 		winner := m.game.DetermineWinner()
@@ -338,13 +352,6 @@ func (m GameModel) getActiveKeybindings() []key.Binding {
 }
 
 // Helper functions
-
-func padString(text string, width int) string {
-	if len(text) >= width {
-		return text
-	}
-	return text + strings.Repeat(" ", width-len(text))
-}
 
 func formatCards(cards []cards.Card) string {
 	if len(cards) == 0 {
