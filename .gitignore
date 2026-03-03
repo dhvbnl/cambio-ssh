@@ -17,6 +17,11 @@ go.work
 # Build output
 /cmd/cmd
 blackjack-game
+blackjack
+
+# SSH host keys (Wish server)
+.ssh/
+cmd/.ssh/
 
 # Dependency directories
 vendor/
