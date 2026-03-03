@@ -12,7 +12,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/ssh"
 	wish "github.com/charmbracelet/wish"
-	bm "github.com/charmbracelet/wish/bubbletea"
+	"github.com/charmbracelet/wish/activeterm"
+	"github.com/charmbracelet/wish/bubbletea"
+	"github.com/charmbracelet/wish/logging"
 	"github.com/dhvbnl/cambio-ssh/cmd/cli"
 )
 
@@ -30,9 +32,9 @@ func main() {
 		wish.WithAddress(address),
 		wish.WithHostKeyPath(hostKeyPath),
 		wish.WithMiddleware(
-			bm.Middleware(func(_ ssh.Session) (tea.Model, []tea.ProgramOption) {
-				return cli.NewGameModel(), []tea.ProgramOption{tea.WithAltScreen()}
-			}),
+			bubbletea.Middleware(teaSessionHandler),
+			activeterm.Middleware(),
+			logging.Middleware(),
 		),
 	)
 	if err != nil {
@@ -56,6 +58,10 @@ func main() {
 			log.Fatalf("ssh server error: %v", err)
 		}
 	}
+}
+
+func teaSessionHandler(_ ssh.Session) (tea.Model, []tea.ProgramOption) {
+	return cli.NewGameModel(), []tea.ProgramOption{tea.WithAltScreen()}
 }
 
 func envOrDefault(key, fallback string) string {
