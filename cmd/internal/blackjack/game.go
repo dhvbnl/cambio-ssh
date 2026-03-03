@@ -106,20 +106,20 @@ func (game *Game) DealerPlay() error {
 	return nil
 }
 
-func (game *Game) DetermineWinner() string {
+func (game *Game) DetermineWinner() int {
 	playerScore := game.PlayerScore()
 	dealerScore := game.DealerScore()
 
 	if playerScore > 21 {
-		return "Dealer wins! Player busted."
+		return 1
 	} else if dealerScore > 21 {
-		return "Player wins! Dealer busted."
+		return 2
 	} else if playerScore > dealerScore {
-		return "Player wins!"
+		return 2
 	} else if dealerScore > playerScore {
-		return "Dealer wins!"
+		return 1
 	} else {
-		return "Push! It's a tie."
+		return 0
 	}
 }
 
