@@ -17,10 +17,10 @@ var suitStrings = map[Suit]string{
 }
 
 var suitSymbols = map[Suit]string{
-	Spades:   "♠",
-	Hearts:   "♥",
-	Diamonds: "♦",
-	Clubs:    "♣",
+	Spades:   "s",
+	Hearts:   "h",
+	Diamonds: "d",
+	Clubs:    "c",
 }
 
 func (suit Suit) String() string {
