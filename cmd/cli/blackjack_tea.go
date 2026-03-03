@@ -5,17 +5,17 @@ import (
 	"os"
 	"strings"
 
-	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/dhvbnl/cambio-ssh/cmd/internal/blackjack"
 	"github.com/dhvbnl/cambio-ssh/cmd/internal/cards"
 )
 
 // PlayBlackjackWithTeaUI starts a blackjack game with Bubble Tea UI
 func PlayBlackjackWithTeaUI() {
-	p := tea.NewProgram(NewGameModel())
+	p := tea.NewProgram(NewGameModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
@@ -108,7 +108,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-	case tea.KeyPressMsg:
+	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keymap.quit):
 			m.state = StateQuit
@@ -178,118 +178,138 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the model
-func (m GameModel) View() tea.View {
-	var s strings.Builder
+func (m GameModel) View() string {
+	var content strings.Builder
 
+	// Title with styling
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("6"))
-	s.WriteString(titleStyle.Render("BLACKJACK"))
-	s.WriteString("\n\n")
+		Foreground(lipgloss.Color("6")).
+		MarginBottom(1)
+	title := titleStyle.Render("BLACKJACK")
+	content.WriteString(title)
+	content.WriteString("\n")
 
-	// Hand box style — fixed width, like the bubbletea example
-	handStyle := lipgloss.NewStyle().
-		Width(30).
-		Height(5).
-		Align(lipgloss.Left, lipgloss.Top).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("8"))
-
-	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	// Card box styling
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("8")).
+		Padding(0, 1)
 
 	switch m.state {
 	case StateInitial:
-		s.WriteString("Welcome to Blackjack!\n\n")
-		s.WriteString("Press ENTER or SPACE to start a new game\n")
-		s.WriteString("Press Q or CTRL+C to quit")
+		content.WriteString("Welcome to Blackjack!\n\n")
+		content.WriteString("Press ENTER or SPACE to start a new game\n")
+		content.WriteString("Press Q or CTRL+C to quit")
 
 	case StatePlaying:
 		dealerCard, _ := m.game.DealerVisibleCard()
 		playerCards := m.game.PlayerHand()
 		playerScore := m.game.PlayerScore()
 
-		dealerText := fmt.Sprintf("DEALER'S HAND\n%s\nScore: %d",
-			formatCards([]cards.Card{dealerCard}),
-			dealerCard.Rank)
-		s.WriteString(handStyle.Render(dealerText))
-		s.WriteString("\n")
+		dealerDisplay := formatCards([]cards.Card{dealerCard})
+		dealerScoreStr := fmt.Sprintf("Score: %d", dealerCard.Rank)
+		dealerBox := boxStyle.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			"DEALER'S HAND",
+			dealerDisplay,
+			dealerScoreStr,
+		))
+		content.WriteString(dealerBox)
+		content.WriteString("\n\n")
 
+		playerDisplay := formatCards(playerCards)
 		scoreStr := fmt.Sprintf("Score: %d", playerScore)
 		if playerScore > 21 {
 			scoreStr += " (BUST!)"
 		}
-		playerText := fmt.Sprintf("YOUR HAND\n%s\n%s",
-			formatCards(playerCards),
-			scoreStr)
-		s.WriteString(handStyle.Render(playerText))
-		s.WriteString("\n\n")
+		playerBox := boxStyle.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			"YOUR HAND",
+			playerDisplay,
+			scoreStr,
+		))
+		content.WriteString(playerBox)
+		content.WriteString("\n\n")
 
+		content.WriteString("Choose your action:\n")
 		hitStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 0]))
 		standStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 1]))
 
-		s.WriteString(hitStyle.Render(renderOption("Hit", m.selectedIndex == 0)))
-		s.WriteString("  ")
-		s.WriteString(standStyle.Render(renderOption("Stand", m.selectedIndex == 1)))
-		s.WriteString("\n")
+		content.WriteString(hitStyle.Render(renderOption("Hit", m.selectedIndex == 0)))
+		content.WriteString("  ")
+		content.WriteString(standStyle.Render(renderOption("Stand", m.selectedIndex == 1)))
+		content.WriteString("\n")
 
 	case StateShowingResult:
 		dealerCards, _ := m.game.DealerHand()
 		playerCards := m.game.PlayerHand()
 
-		dealerText := fmt.Sprintf("DEALER'S HAND\n%s\nScore: %d",
-			formatCards(dealerCards),
-			m.game.DealerScore())
-		s.WriteString(handStyle.Render(dealerText))
-		s.WriteString("\n")
+		dealerDisplay := formatCards(dealerCards)
+		dealerScoreStr := fmt.Sprintf("Score: %d", m.game.DealerScore())
+		dealerBox := boxStyle.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			"DEALER'S HAND",
+			dealerDisplay,
+			dealerScoreStr,
+		))
+		content.WriteString(dealerBox)
+		content.WriteString("\n\n")
 
-		playerText := fmt.Sprintf("YOUR HAND\n%s\nScore: %d",
-			formatCards(playerCards),
-			m.game.PlayerScore())
-		s.WriteString(handStyle.Render(playerText))
-		s.WriteString("\n\n")
+		playerDisplay := formatCards(playerCards)
+		playerScoreStr := fmt.Sprintf("Score: %d", m.game.PlayerScore())
+		playerBox := boxStyle.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			"YOUR HAND",
+			playerDisplay,
+			playerScoreStr,
+		))
+		content.WriteString(playerBox)
+		content.WriteString("\n\n")
 
+		// Determine winner
 		winner := m.game.DetermineWinner()
 		resultStyle := lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color(map[int]string{0: "3", 1: "1", 2: "2"}[winner]))
 		switch winner {
 		case 0:
-			s.WriteString(resultStyle.Render("PUSH! It's a tie!"))
+			content.WriteString(resultStyle.Render("PUSH! It's a tie!"))
 		case 1:
-			s.WriteString(resultStyle.Render("Dealer wins!"))
+			content.WriteString(resultStyle.Render("Dealer wins!"))
 		case 2:
-			s.WriteString(resultStyle.Render("YOU WIN! Congratulations!"))
+			content.WriteString(resultStyle.Render("YOU WIN! Congratulations!"))
 		}
-		s.WriteString("\n\n")
+
+		content.WriteString("\n\n")
 
 	case StatePlayAgain:
-		s.WriteString("Play another round?\n\n")
+		content.WriteString("Play another round?\n\n")
 		yesStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 0]))
 		noStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 1]))
 
-		s.WriteString(yesStyle.Render(renderOption("Yes", m.selectedIndex == 0)))
-		s.WriteString("  ")
-		s.WriteString(noStyle.Render(renderOption("No", m.selectedIndex == 1)))
-		s.WriteString("\n")
+		content.WriteString(yesStyle.Render(renderOption("Yes", m.selectedIndex == 0)))
+		content.WriteString("  ")
+		content.WriteString(noStyle.Render(renderOption("No", m.selectedIndex == 1)))
+		content.WriteString("\n")
 	}
 
 	if m.message != "" {
-		s.WriteString("\n")
+		content.WriteString("\n")
 		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-		s.WriteString(errorStyle.Render("Error: " + m.message))
-		s.WriteString("\n")
+		content.WriteString(errorStyle.Render("Error: " + m.message))
+		content.WriteString("\n")
 	}
 
-	s.WriteString("\n")
-	s.WriteString(helpStyle.Render(m.helpView()))
+	// Add help view
+	content.WriteString("\n")
+	content.WriteString(m.helpView())
 
-	view := tea.NewView(s.String())
-	view.AltScreen = true
-	return view
+	return content.String()
 }
 
 // helpView returns the help text with keybindings
@@ -330,12 +350,12 @@ func (m GameModel) getActiveKeybindings() []key.Binding {
 
 // Helper functions
 
-func formatCards(hand []cards.Card) string {
-	if len(hand) == 0 {
+func formatCards(cards []cards.Card) string {
+	if len(cards) == 0 {
 		return "No cards"
 	}
-	strs := make([]string, len(hand))
-	for i, c := range hand {
+	strs := make([]string, len(cards))
+	for i, c := range cards {
 		strs[i] = c.String()
 	}
 	return strings.Join(strs, " ")
@@ -343,7 +363,7 @@ func formatCards(hand []cards.Card) string {
 
 func renderOption(text string, selected bool) string {
 	if selected {
-		return fmt.Sprintf("> %s <", text)
+		return fmt.Sprintf("►%s◄", text)
 	}
-	return fmt.Sprintf("  %s  ", text)
+	return fmt.Sprintf(" %s ", text)
 }

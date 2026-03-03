@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
-	wish "charm.land/wish/v2"
-	bm "charm.land/wish/v2/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/ssh"
+	wish "github.com/charmbracelet/wish"
+	bm "github.com/charmbracelet/wish/bubbletea"
 	"github.com/dhvbnl/cambio-ssh/cmd/cli"
 )
 
@@ -31,7 +31,7 @@ func main() {
 		wish.WithHostKeyPath(hostKeyPath),
 		wish.WithMiddleware(
 			bm.Middleware(func(_ ssh.Session) (tea.Model, []tea.ProgramOption) {
-				return cli.NewGameModel(), nil
+				return cli.NewGameModel(), []tea.ProgramOption{tea.WithAltScreen()}
 			}),
 		),
 	)
