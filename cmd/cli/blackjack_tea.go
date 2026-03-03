@@ -181,121 +181,18 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m GameModel) View() string {
 	var content strings.Builder
 
-	// Title with styling
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("6")).
-		MarginBottom(1)
-	title := titleStyle.Render("BLACKJACK")
-	content.WriteString(title)
+	content.WriteString(m.renderTitle())
 	content.WriteString("\n")
-
-	// Card box styling
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("8")).
-		Padding(0, 1)
 
 	switch m.state {
 	case StateInitial:
-		content.WriteString("Welcome to Blackjack!\n\n")
-		content.WriteString("Press ENTER or SPACE to start a new game\n")
-		content.WriteString("Press Q or CTRL+C to quit")
-
+		content.WriteString(m.renderInitial())
 	case StatePlaying:
-		dealerCard, _ := m.game.DealerVisibleCard()
-		playerCards := m.game.PlayerHand()
-		playerScore := m.game.PlayerScore()
-
-		dealerDisplay := formatCards([]cards.Card{dealerCard})
-		dealerScoreStr := fmt.Sprintf("Score: %d", dealerCard.Rank)
-		dealerBox := boxStyle.Render(lipgloss.JoinVertical(
-			lipgloss.Left,
-			"DEALER'S HAND",
-			dealerDisplay,
-			dealerScoreStr,
-		))
-		content.WriteString(dealerBox)
-		content.WriteString("\n\n")
-
-		playerDisplay := formatCards(playerCards)
-		scoreStr := fmt.Sprintf("Score: %d", playerScore)
-		if playerScore > 21 {
-			scoreStr += " (BUST!)"
-		}
-		playerBox := boxStyle.Render(lipgloss.JoinVertical(
-			lipgloss.Left,
-			"YOUR HAND",
-			playerDisplay,
-			scoreStr,
-		))
-		content.WriteString(playerBox)
-		content.WriteString("\n\n")
-
-		content.WriteString("Choose your action:\n")
-		hitStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 0]))
-		standStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 1]))
-
-		content.WriteString(hitStyle.Render(renderOption("Hit", m.selectedIndex == 0)))
-		content.WriteString("  ")
-		content.WriteString(standStyle.Render(renderOption("Stand", m.selectedIndex == 1)))
-		content.WriteString("\n")
-
+		content.WriteString(m.renderPlaying())
 	case StateShowingResult:
-		dealerCards, _ := m.game.DealerHand()
-		playerCards := m.game.PlayerHand()
-
-		dealerDisplay := formatCards(dealerCards)
-		dealerScoreStr := fmt.Sprintf("Score: %d", m.game.DealerScore())
-		dealerBox := boxStyle.Render(lipgloss.JoinVertical(
-			lipgloss.Left,
-			"DEALER'S HAND",
-			dealerDisplay,
-			dealerScoreStr,
-		))
-		content.WriteString(dealerBox)
-		content.WriteString("\n\n")
-
-		playerDisplay := formatCards(playerCards)
-		playerScoreStr := fmt.Sprintf("Score: %d", m.game.PlayerScore())
-		playerBox := boxStyle.Render(lipgloss.JoinVertical(
-			lipgloss.Left,
-			"YOUR HAND",
-			playerDisplay,
-			playerScoreStr,
-		))
-		content.WriteString(playerBox)
-		content.WriteString("\n\n")
-
-		// Determine winner
-		winner := m.game.DetermineWinner()
-		resultStyle := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color(map[int]string{0: "3", 1: "1", 2: "2"}[winner]))
-		switch winner {
-		case 0:
-			content.WriteString(resultStyle.Render("PUSH! It's a tie!"))
-		case 1:
-			content.WriteString(resultStyle.Render("Dealer wins!"))
-		case 2:
-			content.WriteString(resultStyle.Render("YOU WIN! Congratulations!"))
-		}
-
-		content.WriteString("\n\n")
-
+		content.WriteString(m.renderResult())
 	case StatePlayAgain:
-		content.WriteString("Play another round?\n\n")
-		yesStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 0]))
-		noStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 1]))
-
-		content.WriteString(yesStyle.Render(renderOption("Yes", m.selectedIndex == 0)))
-		content.WriteString("  ")
-		content.WriteString(noStyle.Render(renderOption("No", m.selectedIndex == 1)))
-		content.WriteString("\n")
+		content.WriteString(m.renderPlayAgain())
 	}
 
 	if m.message != "" {
@@ -305,11 +202,145 @@ func (m GameModel) View() string {
 		content.WriteString("\n")
 	}
 
-	// Add help view
 	content.WriteString("\n")
 	content.WriteString(m.helpView())
 
 	return content.String()
+}
+
+func (m GameModel) renderTitle() string {
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("6")).
+		MarginBottom(1)
+	return titleStyle.Render("BLACKJACK")
+}
+
+func (m GameModel) renderInitial() string {
+	var b strings.Builder
+	b.WriteString("Welcome to Blackjack!\n\n")
+	b.WriteString("Press ENTER or SPACE to start a new game\n")
+	b.WriteString("Press Q or CTRL+C to quit\n\n")
+	b.WriteString("How to play:\n")
+	b.WriteString("- Goal: finish with a hand value closer to 21 than the dealer without busting.\n")
+	b.WriteString("- Card values: 2-10 face value, J/Q/K = 10, Ace = 1 or 11 (best for you).\n")
+	b.WriteString("- Your turn: hit to take a card or stand to hold. Busting (over 21) loses immediately.\n")
+	b.WriteString("- Dealer: reveals hand after you stand, then hits until at least 17.\n")
+	b.WriteString("- Outcomes: higher total wins; tie is a push; busting always loses.\n")
+	return b.String()
+}
+
+func (m GameModel) renderPlaying() string {
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("8")).
+		Padding(0, 1)
+
+	dealerCard, _ := m.game.DealerVisibleCard()
+	playerCards := m.game.PlayerHand()
+	playerScore := m.game.PlayerScore()
+
+	dealerDisplay := formatCards([]cards.Card{dealerCard})
+	dealerScoreStr := fmt.Sprintf("Score: %d", dealerCard.Rank)
+	dealerBox := boxStyle.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		"DEALER'S HAND",
+		dealerDisplay,
+		dealerScoreStr,
+	))
+
+	playerDisplay := formatCards(playerCards)
+	scoreStr := fmt.Sprintf("Score: %d", playerScore)
+	if playerScore > 21 {
+		scoreStr += " (BUST!)"
+	}
+	playerBox := boxStyle.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		"YOUR HAND",
+		playerDisplay,
+		scoreStr,
+	))
+
+	hitStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 0]))
+	standStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 1]))
+
+	var b strings.Builder
+	b.WriteString(dealerBox)
+	b.WriteString("\n\n")
+	b.WriteString(playerBox)
+	b.WriteString("\n\n")
+	b.WriteString("Choose your action:\n")
+	b.WriteString(hitStyle.Render(renderOption("Hit", m.selectedIndex == 0)))
+	b.WriteString("  ")
+	b.WriteString(standStyle.Render(renderOption("Stand", m.selectedIndex == 1)))
+	b.WriteString("\n")
+	return b.String()
+}
+
+func (m GameModel) renderResult() string {
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("8")).
+		Padding(0, 1)
+
+	dealerCards, _ := m.game.DealerHand()
+	playerCards := m.game.PlayerHand()
+
+	dealerDisplay := formatCards(dealerCards)
+	dealerScoreStr := fmt.Sprintf("Score: %d", m.game.DealerScore())
+	dealerBox := boxStyle.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		"DEALER'S HAND",
+		dealerDisplay,
+		dealerScoreStr,
+	))
+
+	playerDisplay := formatCards(playerCards)
+	playerScoreStr := fmt.Sprintf("Score: %d", m.game.PlayerScore())
+	playerBox := boxStyle.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		"YOUR HAND",
+		playerDisplay,
+		playerScoreStr,
+	))
+
+	winner := m.game.DetermineWinner()
+	resultStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color(map[int]string{0: "3", 1: "1", 2: "2"}[winner]))
+
+	var b strings.Builder
+	b.WriteString(dealerBox)
+	b.WriteString("\n\n")
+	b.WriteString(playerBox)
+	b.WriteString("\n\n")
+	switch winner {
+	case 0:
+		b.WriteString(resultStyle.Render("PUSH! It's a tie!"))
+	case 1:
+		b.WriteString(resultStyle.Render("Dealer wins!"))
+	case 2:
+		b.WriteString(resultStyle.Render("YOU WIN! Congratulations!"))
+	}
+	b.WriteString("\n\n")
+	return b.String()
+}
+
+func (m GameModel) renderPlayAgain() string {
+	yesStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 0]))
+	noStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 1]))
+
+	var b strings.Builder
+	b.WriteString("Play another round?\n\n")
+	b.WriteString(yesStyle.Render(renderOption("Yes", m.selectedIndex == 0)))
+	b.WriteString("  ")
+	b.WriteString(noStyle.Render(renderOption("No", m.selectedIndex == 1)))
+	b.WriteString("\n")
+	return b.String()
 }
 
 // helpView returns the help text with keybindings
