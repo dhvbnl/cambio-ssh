@@ -20,7 +20,7 @@ import (
 
 func main() {
 	host := envOrDefault("SSH_HOST", "0.0.0.0")
-	port := envOrDefault("SSH_PORT", "23234")
+	port := envOrDefault("SSH_PORT", "22")
 	address := host + ":" + port
 
 	hostKeyPath := envOrDefault("SSH_HOST_KEY_PATH", filepath.Join(".ssh", "id_ed25519"))
@@ -61,7 +61,7 @@ func main() {
 }
 
 func teaSessionHandler(_ ssh.Session) (tea.Model, []tea.ProgramOption) {
-	return cli.NewGameModel(), []tea.ProgramOption{tea.WithAltScreen()}
+	return cli.NewRootModel(), []tea.ProgramOption{tea.WithAltScreen()}
 }
 
 func envOrDefault(key, fallback string) string {
