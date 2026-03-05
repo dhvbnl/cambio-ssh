@@ -12,7 +12,6 @@ import (
 )
 
 var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")).MarginBottom(1)
 	boxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1)
 	errorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	actionOn    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
@@ -76,8 +75,8 @@ func NewGameModel() GameModel {
 			key.WithHelp("enter", "continue"),
 		),
 		quit: key.NewBinding(
-			key.WithKeys("ctrl+c", "q"),
-			key.WithHelp("q", "quit"),
+			key.WithKeys("ctrl+c"),
+			key.WithHelp("ctrl+c", "quit"),
 		),
 		escape: key.NewBinding(
 			key.WithKeys("esc"),

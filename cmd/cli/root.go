@@ -35,7 +35,7 @@ func NewRootModel() RootModel {
 	factories := map[screenID]func() tea.Model{
 		screenHome:      func() tea.Model { return NewMenuModel() },
 		screenBlackjack: func() tea.Model { return NewGameModel() },
-		screenChat:      func() tea.Model { return NewChatPlaceholder() },
+		screenChat:      func() tea.Model { return NewChatModel() },
 	}
 
 	screens := make(map[screenID]tea.Model, len(factories))
@@ -79,7 +79,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "ctrl+c":
 			return m, tea.Quit
 		}
 	}
@@ -136,7 +136,7 @@ func NewMenuModel() MenuModel {
 		key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "choose")),
-		key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q/ctrl+c", "quit")),
 	}
 
 	styles := newMenuStyles()
@@ -145,6 +145,7 @@ func NewMenuModel() MenuModel {
 	l := list.New(items, delegate, 0, 0)
 	l.Title = "Welcome to Cambio SSH"
 	l.Styles.Title = styles.title
+	l.DisableQuitKeybindings()
 	l.SetFilteringEnabled(false)
 	l.SetShowStatusBar(false)
 	l.SetShowPagination(false)
