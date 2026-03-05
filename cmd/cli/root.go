@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dhvbnl/cambio-ssh/cmd/internal/chat"
 )
 
 type screenID string
@@ -29,13 +30,15 @@ type RootModel struct {
 	screens   map[screenID]tea.Model
 	factories map[screenID]func() tea.Model
 	lastSize  *tea.WindowSizeMsg
+	username  string
+	chat      *chat.Chat
 }
 
-func NewRootModel() RootModel {
+func NewRootModel(username string, sharedChat *chat.Chat) RootModel {
 	factories := map[screenID]func() tea.Model{
 		screenHome:      func() tea.Model { return NewMenuModel() },
 		screenBlackjack: func() tea.Model { return NewGameModel() },
-		screenChat:      func() tea.Model { return NewChatModel() },
+		screenChat:      func() tea.Model { return NewChatModel(sharedChat, username) },
 	}
 
 	screens := make(map[screenID]tea.Model, len(factories))
@@ -45,6 +48,8 @@ func NewRootModel() RootModel {
 		active:    screenHome,
 		screens:   screens,
 		factories: factories,
+		username:  username,
+		chat:      sharedChat,
 	}
 }
 
@@ -96,8 +101,6 @@ func (m RootModel) View() string {
 	}
 	return "Unknown view"
 }
-
-// Home menu screen ----------------------------------------------------------------
 
 type menuItem struct {
 	title       string

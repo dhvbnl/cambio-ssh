@@ -2,6 +2,7 @@ package cli
 
 import (
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/key"
@@ -18,14 +19,24 @@ var (
 )
 
 type ChatModel struct {
-	width    int
-	height   int
-	viewport viewport.Model
-	chat     *chat.Chat
-	textarea textarea.Model
+	width       int
+	height      int
+	viewport    viewport.Model
+	chat        *chat.Chat
+	textarea    textarea.Model
+	username    string
+	lastVersion uint64
 }
 
-func NewChatModel() ChatModel {
+type chatPollMsg struct{}
+
+func pollChat() tea.Cmd {
+	return tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg {
+		return chatPollMsg{}
+	})
+}
+
+func NewChatModel(sharedChat *chat.Chat, username string) ChatModel {
 	//
 	textarea := textarea.New()
 	textarea.Placeholder = "send a message..."
@@ -48,16 +59,27 @@ func NewChatModel() ChatModel {
 
 	textarea.KeyMap.InsertNewline.SetEnabled(false)
 
-	chat := chat.NewChat()
-
 	return ChatModel{
 		textarea: textarea,
 		viewport: viewport,
-		chat:     chat,
+		chat:     sharedChat,
+		username: username,
 	}
 }
 
-func (m ChatModel) Init() tea.Cmd { return textarea.Blink }
+func (m ChatModel) Init() tea.Cmd { return tea.Batch(textarea.Blink, pollChat()) }
+
+func (m *ChatModel) refreshViewport() {
+	messages := m.chat.GetFormattedMessages()
+	if len(messages) > 0 {
+		formattedMessages := lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(messages, "\n"))
+		m.viewport.SetContent(formattedMessages)
+	} else {
+		m.viewport.SetContent("Welcome to the chat!")
+	}
+	m.viewport.GotoBottom()
+	m.lastVersion = m.chat.Version()
+}
 
 func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -75,29 +97,25 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = m.width
 		m.viewport.Height = usableHeight
 
-		messages := m.chat.GetFormattedMessages()
-		if len(messages) > 0 {
-			formattedMessages := lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(messages, "\n"))
-			m.viewport.SetContent(formattedMessages)
-		}
-		m.viewport.GotoBottom()
+		m.refreshViewport()
 		return m, nil
+	case chatPollMsg:
+		if m.chat.Version() != m.lastVersion {
+			m.refreshViewport()
+		}
+		return m, pollChat()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
-		case "b", "esc":
+		case "esc":
 			return m, navigate(screenHome)
 		case "enter":
 			content := m.textarea.Value()
 			if strings.TrimSpace(content) != "" {
-				m.chat.AddMessage("You", content)
+				m.chat.AddMessage(m.username, content)
 				m.textarea.Reset()
-
-				messages := m.chat.GetFormattedMessages()
-				formattedMessages := lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(messages, "\n"))
-				m.viewport.SetContent(formattedMessages)
-				m.viewport.GotoBottom()
+				m.refreshViewport()
 			}
 			return m, nil
 		default:
@@ -121,7 +139,7 @@ func (m ChatModel) View() string {
 	body := lipgloss.JoinVertical(lipgloss.Left, header, "", viewportView, textareaView)
 
 	keys := []key.Binding{
-		key.NewBinding(key.WithKeys("b", "esc"), key.WithHelp("b/esc", "back")),
+		key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 		key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 	}
 

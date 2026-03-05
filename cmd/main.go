@@ -16,7 +16,10 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
 	"github.com/dhvbnl/cambio-ssh/cmd/cli"
+	"github.com/dhvbnl/cambio-ssh/cmd/internal/chat"
 )
+
+var sharedChat = chat.NewChat()
 
 func main() {
 	host := envOrDefault("SSH_HOST", "0.0.0.0")
@@ -60,8 +63,12 @@ func main() {
 	}
 }
 
-func teaSessionHandler(_ ssh.Session) (tea.Model, []tea.ProgramOption) {
-	return cli.NewRootModel(), []tea.ProgramOption{tea.WithAltScreen()}
+func teaSessionHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
+	username := s.User()
+	if username == "" {
+		username = "guest"
+	}
+	return cli.NewRootModel(username, sharedChat), []tea.ProgramOption{tea.WithAltScreen()}
 }
 
 func envOrDefault(key, fallback string) string {
