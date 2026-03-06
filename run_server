@@ -1,4 +1,4 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 go mod tidy
-go run cmd/main.go
+sudo go run cmd/main.go
