@@ -2,10 +2,8 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -13,14 +11,13 @@ import (
 	"github.com/dhvbnl/cambio-ssh/cmd/internal/cards"
 )
 
-// PlayBlackjackWithTeaUI starts a blackjack game with Bubble Tea UI
-func PlayBlackjackWithTeaUI() {
-	p := tea.NewProgram(NewGameModel(), tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
-}
+var (
+	boxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1)
+	errorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	actionOn    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	actionOff   = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+	winnerColor = map[int]string{0: "3", 1: "1", 2: "2"}
+)
 
 // GameState represents the current state of the game UI
 type GameState int
@@ -34,16 +31,13 @@ const (
 )
 
 type keymap struct {
-	hit   key.Binding
-	stand key.Binding
-	yes   key.Binding
-	no    key.Binding
-	up    key.Binding
-	down  key.Binding
-	left  key.Binding
-	right key.Binding
-	start key.Binding
-	quit  key.Binding
+	hit    key.Binding
+	stand  key.Binding
+	yes    key.Binding
+	no     key.Binding
+	start  key.Binding
+	quit   key.Binding
+	escape key.Binding
 }
 
 // GameModel represents the Bubble Tea model for the blackjack game
@@ -55,7 +49,6 @@ type GameModel struct {
 	width         int
 	height        int
 	keymap        keymap
-	help          help.Model
 }
 
 // NewGameModel creates a new game model
@@ -82,8 +75,12 @@ func NewGameModel() GameModel {
 			key.WithHelp("enter", "continue"),
 		),
 		quit: key.NewBinding(
-			key.WithKeys("ctrl+c", "q"),
-			key.WithHelp("q", "quit"),
+			key.WithKeys("ctrl+c"),
+			key.WithHelp("ctrl+c", "quit"),
+		),
+		escape: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "back"),
 		),
 	}
 
@@ -93,7 +90,6 @@ func NewGameModel() GameModel {
 		selectedIndex: 0,
 		message:       "",
 		keymap:        km,
-		help:          help.New(),
 	}
 }
 
@@ -106,10 +102,13 @@ func (m GameModel) Init() tea.Cmd {
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		h, v := appFrameSize()
+		m.width = msg.Width - h
+		m.height = msg.Height - v
 	case tea.KeyMsg:
 		switch {
+		case key.Matches(msg, m.keymap.escape):
+			return m, navigate(screenHome)
 		case key.Matches(msg, m.keymap.quit):
 			m.state = StateQuit
 			return m, tea.Quit
@@ -179,42 +178,34 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the model
 func (m GameModel) View() string {
-	var content strings.Builder
+	var body strings.Builder
 
-	content.WriteString(m.renderTitle())
-	content.WriteString("\n")
+	body.WriteString(m.renderTitle())
+	body.WriteString("\n")
 
 	switch m.state {
 	case StateInitial:
-		content.WriteString(m.renderInitial())
+		body.WriteString(m.renderInitial())
 	case StatePlaying:
-		content.WriteString(m.renderPlaying())
+		body.WriteString(m.renderPlaying())
 	case StateShowingResult:
-		content.WriteString(m.renderResult())
+		body.WriteString(m.renderResult())
 	case StatePlayAgain:
-		content.WriteString(m.renderPlayAgain())
+		body.WriteString(m.renderPlayAgain())
 	}
 
 	if m.message != "" {
-		content.WriteString("\n")
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-		content.WriteString(errorStyle.Render("Error: " + m.message))
-		content.WriteString("\n")
+		body.WriteString("\n")
+		body.WriteString(errorStyle.Render("Error: " + m.message))
+		body.WriteString("\n")
 	}
 
-	content.WriteString("\n")
-	content.WriteString(m.helpView())
-
-	return content.String()
+	helpStr := renderKeyHelp(m.width, m.getActiveKeybindings())
+	content := renderWithFooter(body.String(), helpStr, m.width, m.height)
+	return renderApp(content)
 }
 
-func (m GameModel) renderTitle() string {
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("6")).
-		MarginBottom(1)
-	return titleStyle.Render("BLACKJACK")
-}
+func (m GameModel) renderTitle() string { return titleStyle.Render("BLACKJACK") }
 
 func (m GameModel) renderInitial() string {
 	var b strings.Builder
@@ -231,11 +222,6 @@ func (m GameModel) renderInitial() string {
 }
 
 func (m GameModel) renderPlaying() string {
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("8")).
-		Padding(0, 1)
-
 	dealerCard, _ := m.game.DealerVisibleCard()
 	playerCards := m.game.PlayerHand()
 	playerScore := m.game.PlayerScore()
@@ -261,30 +247,20 @@ func (m GameModel) renderPlaying() string {
 		scoreStr,
 	))
 
-	hitStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 0]))
-	standStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 1]))
-
 	var b strings.Builder
 	b.WriteString(dealerBox)
 	b.WriteString("\n\n")
 	b.WriteString(playerBox)
 	b.WriteString("\n\n")
 	b.WriteString("Choose your action:\n")
-	b.WriteString(hitStyle.Render(renderOption("Hit", m.selectedIndex == 0)))
+	b.WriteString(actionStyle(m.selectedIndex == 0).Render(renderOption("Hit", m.selectedIndex == 0)))
 	b.WriteString("  ")
-	b.WriteString(standStyle.Render(renderOption("Stand", m.selectedIndex == 1)))
+	b.WriteString(actionStyle(m.selectedIndex == 1).Render(renderOption("Stand", m.selectedIndex == 1)))
 	b.WriteString("\n")
 	return b.String()
 }
 
 func (m GameModel) renderResult() string {
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("8")).
-		Padding(0, 1)
-
 	dealerCards, _ := m.game.DealerHand()
 	playerCards := m.game.PlayerHand()
 
@@ -307,9 +283,7 @@ func (m GameModel) renderResult() string {
 	))
 
 	winner := m.game.DetermineWinner()
-	resultStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color(map[int]string{0: "3", 1: "1", 2: "2"}[winner]))
+	resultStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(winnerColor[winner]))
 
 	var b strings.Builder
 	b.WriteString(dealerBox)
@@ -329,23 +303,20 @@ func (m GameModel) renderResult() string {
 }
 
 func (m GameModel) renderPlayAgain() string {
-	yesStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 0]))
-	noStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(map[bool]string{true: "10", false: "7"}[m.selectedIndex == 1]))
-
 	var b strings.Builder
 	b.WriteString("Play another round?\n\n")
-	b.WriteString(yesStyle.Render(renderOption("Yes", m.selectedIndex == 0)))
+	b.WriteString(actionStyle(m.selectedIndex == 0).Render(renderOption("Yes", m.selectedIndex == 0)))
 	b.WriteString("  ")
-	b.WriteString(noStyle.Render(renderOption("No", m.selectedIndex == 1)))
+	b.WriteString(actionStyle(m.selectedIndex == 1).Render(renderOption("No", m.selectedIndex == 1)))
 	b.WriteString("\n")
 	return b.String()
 }
 
-// helpView returns the help text with keybindings
-func (m GameModel) helpView() string {
-	return "\n" + m.help.ShortHelpView(m.getActiveKeybindings())
+func actionStyle(active bool) lipgloss.Style {
+	if active {
+		return actionOn
+	}
+	return actionOff
 }
 
 // getActiveKeybindings returns the appropriate keybindings for the current state

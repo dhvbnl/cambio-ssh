@@ -12,13 +12,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/ssh"
 	wish "github.com/charmbracelet/wish"
-	bm "github.com/charmbracelet/wish/bubbletea"
+	"github.com/charmbracelet/wish/activeterm"
+	"github.com/charmbracelet/wish/bubbletea"
+	"github.com/charmbracelet/wish/logging"
 	"github.com/dhvbnl/cambio-ssh/cmd/cli"
+	"github.com/dhvbnl/cambio-ssh/cmd/internal/chat"
 )
+
+var sharedChat = chat.NewChat()
 
 func main() {
 	host := envOrDefault("SSH_HOST", "0.0.0.0")
-	port := envOrDefault("SSH_PORT", "23234")
+	port := envOrDefault("SSH_PORT", "22")
 	address := host + ":" + port
 
 	hostKeyPath := envOrDefault("SSH_HOST_KEY_PATH", filepath.Join(".ssh", "id_ed25519"))
@@ -30,9 +35,9 @@ func main() {
 		wish.WithAddress(address),
 		wish.WithHostKeyPath(hostKeyPath),
 		wish.WithMiddleware(
-			bm.Middleware(func(_ ssh.Session) (tea.Model, []tea.ProgramOption) {
-				return cli.NewGameModel(), []tea.ProgramOption{tea.WithAltScreen()}
-			}),
+			bubbletea.Middleware(teaSessionHandler),
+			activeterm.Middleware(),
+			logging.Middleware(),
 		),
 	)
 	if err != nil {
@@ -56,6 +61,14 @@ func main() {
 			log.Fatalf("ssh server error: %v", err)
 		}
 	}
+}
+
+func teaSessionHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
+	username := s.User()
+	if username == "" {
+		username = "guest"
+	}
+	return cli.NewRootModel(username, sharedChat), []tea.ProgramOption{tea.WithAltScreen()}
 }
 
 func envOrDefault(key, fallback string) string {

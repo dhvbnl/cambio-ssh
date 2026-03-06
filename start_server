@@ -1,0 +1,5 @@
+# need to run this every time you change the unit file
+sudo systemctl daemon-reload
+
+# start/restart/stop/etc:
+sudo systemctl start game
