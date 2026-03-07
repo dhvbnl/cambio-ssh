@@ -22,7 +22,7 @@ type Game struct {
 
 func NewGame() Game {
 	return Game{
-		deck:   cards.NewDeck(4),
+		deck:   cards.NewDeck(4, false),
 		player: Player{hand: []cards.Card{}, isDealer: false},
 		dealer: Player{hand: []cards.Card{}, isDealer: true},
 		isOver: true,
@@ -39,7 +39,7 @@ func (game *Game) InitialDeal() error {
 
 	reshuffleThreshold := rand.Intn(10) + 25
 	if game.deck.AvailableCards() < reshuffleThreshold {
-		game.deck = cards.NewDeck(4)
+		game.deck = cards.NewDeck(4, false)
 	}
 
 	for range 2 {
