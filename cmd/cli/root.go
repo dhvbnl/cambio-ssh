@@ -13,6 +13,7 @@ type screenID string
 const (
 	screenHome      screenID = "home"
 	screenBlackjack screenID = "blackjack"
+	screenCambio    screenID = "cambio"
 	screenChat      screenID = "chat"
 )
 
@@ -38,6 +39,7 @@ func NewRootModel(username string, sharedChat *chat.Chat) RootModel {
 	factories := map[screenID]func() tea.Model{
 		screenHome:      func() tea.Model { return NewMenuModel() },
 		screenBlackjack: func() tea.Model { return NewGameModel() },
+		screenCambio:    func() tea.Model { return NewCambioGameModel() },
 		screenChat:      func() tea.Model { return NewChatModel(sharedChat, username) },
 	}
 
@@ -132,6 +134,7 @@ type MenuModel struct {
 func NewMenuModel() MenuModel {
 	items := []list.Item{
 		menuItem{title: "Blackjack", description: "Play the blackjack game"},
+		menuItem{title: "Cambio (2 Player)", description: "Play the cambio game"},
 		menuItem{title: "Chat (placeholder)", description: "Stub screen for future chat"},
 	}
 
@@ -195,6 +198,8 @@ func (m MenuModel) activateSelection() tea.Cmd {
 		switch item.title {
 		case "Blackjack":
 			return navigate(screenBlackjack)
+		case "Cambio (2 Player)":
+			return navigate(screenCambio)
 		case "Chat (placeholder)":
 			return navigate(screenChat)
 		}

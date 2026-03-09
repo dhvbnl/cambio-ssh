@@ -27,6 +27,7 @@ const (
 type gameState string
 
 const (
+	gameStart      gameState = "game_start"
 	waitingForTurn gameState = "waiting_for_turn"
 	takingTurn     gameState = "taking_turn"
 	removingCard   gameState = "removing_card"
@@ -61,7 +62,7 @@ func NewGame(playerCount int) *Game {
 		playerCards:      make([][]cards.Card, playerCount),
 		playerCalledGame: -1,
 		playerTurn:       0,
-		gameState:        waitingForTurn,
+		gameState:        gameStart,
 		turnType:         unselected,
 	}
 
@@ -125,6 +126,16 @@ func (game *Game) validateRemoveAction() error {
 		return ErrInvalidTurn
 	}
 	return nil
+}
+
+func (game *Game) StartGame() {
+	game.mu.Lock()
+	defer game.mu.Unlock()
+
+	if game.gameState != gameStart {
+		return
+	}
+	game.gameState = waitingForTurn
 }
 
 func DrawCard(game *Game) {
@@ -316,6 +327,18 @@ func EndGame(game *Game) {
 	game.turnType = unselected
 }
 
+func GetGameStart(game *Game) bool {
+	game.mu.RLock()
+	defer game.mu.RUnlock()
+	return game.gameState == gameStart
+}
+
+func GetActivePlayer(game *Game) int {
+	game.mu.RLock()
+	defer game.mu.RUnlock()
+	return game.playerTurn + 0
+}
+
 func GetTopDiscardCard(game *Game) cards.Card {
 	game.mu.RLock()
 	defer game.mu.RUnlock()
@@ -331,6 +354,18 @@ func GetPlayerHand(game *Game, playerIndex int) []cards.Card {
 	hand := make([]cards.Card, len(game.playerCards[playerIndex]))
 	copy(hand, game.playerCards[playerIndex])
 	return hand
+}
+
+func GetAllPlayerHands(game *Game) [][]cards.Card {
+	game.mu.RLock()
+	defer game.mu.RUnlock()
+
+	hands := make([][]cards.Card, game.playerCount)
+	for i := 0; i < game.playerCount; i++ {
+		hands[i] = make([]cards.Card, len(game.playerCards[i]))
+		copy(hands[i], game.playerCards[i])
+	}
+	return hands
 }
 
 func GetActiveCard(game *Game, playerIndex int) cards.Card {

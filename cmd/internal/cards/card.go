@@ -1,9 +1,11 @@
 package cards
 
+import "strings"
+
 type Suit uint8
 
 const (
-	Spades Suit = iota
+	Spades Suit = iota + 1
 	Hearts
 	Diamonds
 	Clubs
@@ -86,6 +88,40 @@ type Card struct {
 	Rank Rank
 }
 
+func (card Card) IsRed() bool {
+	return card.Suit == Hearts || card.Suit == Diamonds
+}
+
 func (card Card) String() string {
 	return rankSymbols[card.Rank] + suitSymbols[card.Suit]
+}
+
+// RenderFace returns a 3-line card face:
+// suit in the top-left, rank centered, and suit in the bottom-right.
+func (card Card) RenderFace() string {
+	const faceWidth = 3
+
+	if card.Suit == 0 || card.Rank == 0 {
+		return strings.Repeat(" ", faceWidth) + "\n" +
+			strings.Repeat(" ", faceWidth) + "\n" +
+			strings.Repeat(" ", faceWidth)
+	}
+
+	suit := suitSymbols[card.Suit]
+	rank := rankSymbols[card.Rank]
+
+	top := suit + strings.Repeat(" ", faceWidth-1)
+	middle := centerText(faceWidth, rank)
+	bottom := strings.Repeat(" ", faceWidth-1) + suit
+
+	return strings.Join([]string{top, middle, bottom}, "\n")
+}
+
+func centerText(width int, text string) string {
+	if len(text) >= width {
+		return text
+	}
+	leftPad := (width - len(text)) / 2
+	rightPad := width - len(text) - leftPad
+	return strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad)
 }
