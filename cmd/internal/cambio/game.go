@@ -2,6 +2,7 @@ package cambio
 
 import (
 	"errors"
+	"log"
 	"slices"
 	"sync"
 
@@ -12,26 +13,26 @@ var ErrInvalidTurn = errors.New("invalid turn")
 
 const startingHandSize = 4
 
-type turnType string
+type TurnType string
 
 const (
-	discard        turnType = "d"
-	replace        turnType = "r"
-	lookAtSelf     turnType = "e"
-	lookAtOpponent turnType = "l"
-	swap           turnType = "s"
-	callGame       turnType = "c"
-	unselected     turnType = "u"
+	Discard        TurnType = "i"
+	Replace        TurnType = "r"
+	LookAtSelf     TurnType = "e"
+	LookAtOpponent TurnType = "l"
+	Swap           TurnType = "s"
+	CallGame       TurnType = "c"
+	Unselected     TurnType = "u"
 )
 
-type gameState string
+type GameState string
 
 const (
-	gameStart      gameState = "game_start"
-	waitingForTurn gameState = "waiting_for_turn"
-	takingTurn     gameState = "taking_turn"
-	removingCard   gameState = "removing_card"
-	gameOver       gameState = "game_over"
+	GameStart      GameState = "game_start"
+	WaitingForTurn GameState = "waiting_for_turn"
+	TakingTurn     GameState = "taking_turn"
+	RemovingCard   GameState = "removing_card"
+	GameOver       GameState = "game_over"
 )
 
 type replaceInfo struct {
@@ -48,10 +49,10 @@ type Game struct {
 	activeCard       cards.Card     // the card that is currently being played, i.e. the card that was just drawn
 	playerCalledGame int            // -1 means no one has called game yet; otherwise stores player index
 	playerTurn       int            // corresponds to player index, so 0 for player 1, 1 for player 2
-	turnType         turnType       // the type of action the current player is taking
-	validTurnTypes   []turnType     // the valid turn types for the current active card
-	gameState        gameState      // the current state of the game
-	savedGameState   gameState      // used for when a player removes card so we can return to the previous game state after removal is done
+	turnType         TurnType       // the type of action the current player is taking
+	validTurnTypes   []TurnType     // the valid turn types for the current active card
+	gameState        GameState      // the current state of the game
+	savedGameState   GameState      // used for when a player removes card so we can return to the previous game state after removal is done
 	replacing        *replaceInfo   // information about the card being replaced
 }
 
@@ -62,8 +63,8 @@ func NewGame(playerCount int) *Game {
 		playerCards:      make([][]cards.Card, playerCount),
 		playerCalledGame: -1,
 		playerTurn:       0,
-		gameState:        gameStart,
-		turnType:         unselected,
+		gameState:        GameStart,
+		turnType:         Unselected,
 	}
 
 	game.dealStartingHands(startingHandSize)
@@ -90,31 +91,31 @@ func (game *Game) clearActiveCard(discard bool) {
 
 func (game *Game) advanceTurn() {
 	if game.playerCalledGame >= 0 && game.playerCalledGame == (game.playerTurn+1)%game.playerCount {
-		game.gameState = gameOver
-		game.turnType = unselected
+		game.gameState = GameOver
+		game.turnType = Unselected
 		game.validTurnTypes = nil
 		return
 	}
 
 	game.playerTurn = (game.playerTurn + 1) % game.playerCount
-	game.gameState = waitingForTurn
-	game.turnType = unselected
+	game.gameState = WaitingForTurn
+	game.turnType = Unselected
 	game.validTurnTypes = nil
 }
 
 // State machine validators
 
 // validateTurnAction checks if a consuming action (discard/replace) can execute.
-func (game *Game) validateTurnAction(expectedTurnType turnType) error {
-	if game.gameState != takingTurn || game.turnType != expectedTurnType {
+func (game *Game) validateTurnAction(expectedTurnType TurnType) error {
+	if game.gameState != TakingTurn || game.turnType != expectedTurnType {
 		return ErrInvalidTurn
 	}
 	return nil
 }
 
 // validateViewAction checks if a non-consuming action (look/swap) can execute in takingTurn.
-func (game *Game) validateViewAction(expectedTurnType turnType) error {
-	if game.gameState != takingTurn || game.turnType != expectedTurnType {
+func (game *Game) validateViewAction(expectedTurnType TurnType) error {
+	if game.gameState != TakingTurn || game.turnType != expectedTurnType {
 		return ErrInvalidTurn
 	}
 	return nil
@@ -122,7 +123,7 @@ func (game *Game) validateViewAction(expectedTurnType turnType) error {
 
 // validateRemoveAction checks if a card can be removed during the removingCard state.
 func (game *Game) validateRemoveAction() error {
-	if game.gameState != removingCard && game.gameState != takingTurn {
+	if game.gameState != RemovingCard && game.gameState != TakingTurn {
 		return ErrInvalidTurn
 	}
 	return nil
@@ -132,41 +133,42 @@ func (game *Game) StartGame() {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if game.gameState != gameStart {
+	if game.gameState != GameStart {
 		return
 	}
-	game.gameState = waitingForTurn
+	game.gameState = WaitingForTurn
 }
 
-func DrawCard(game *Game) {
+func (game *Game) DrawCard() {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if game.gameState != waitingForTurn {
+	if game.gameState != WaitingForTurn {
 		return
 	}
 	card := game.deck.DrawWithReshuffle()
 	game.activeCard = card
-	game.gameState = takingTurn
-	game.turnType = unselected
-	game.validTurnTypes = getValidTurnType(game)
+	game.gameState = TakingTurn
+	game.turnType = Unselected
+	game.validTurnTypes = game.getValidTurnType()
+	log.Printf("Player %d drew card: %s of %s", game.playerTurn+1, card.Rank, card.Suit)
 }
 
-func SelectTurnType(game *Game, turn turnType) {
+func (game *Game) SelectTurnType(turn TurnType) {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if game.gameState != takingTurn || !slices.Contains(game.validTurnTypes, turn) {
+	if game.gameState != TakingTurn || !slices.Contains(game.validTurnTypes, turn) {
 		return
 	}
 	game.turnType = turn
 }
 
-func DiscardCard(game *Game) error {
+func (game *Game) DiscardCard() error {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if err := game.validateTurnAction(discard); err != nil {
+	if err := game.validateTurnAction(Discard); err != nil {
 		return err
 	}
 
@@ -175,11 +177,11 @@ func DiscardCard(game *Game) error {
 	return nil
 }
 
-func ReplaceCard(game *Game, cardIndex int) error {
+func (game *Game) ReplaceCard(cardIndex int) error {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if err := game.validateTurnAction(replace); err != nil {
+	if err := game.validateTurnAction(Replace); err != nil {
 		return err
 	}
 
@@ -195,11 +197,11 @@ func ReplaceCard(game *Game, cardIndex int) error {
 	return nil
 }
 
-func LookAtOwnCard(game *Game, cardIndex int) (cards.Card, error) {
+func (game *Game) LookAtOwnCard(cardIndex int) (cards.Card, error) {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if err := game.validateViewAction(lookAtSelf); err != nil {
+	if err := game.validateViewAction(LookAtSelf); err != nil {
 		return cards.Card{}, err
 	}
 
@@ -210,11 +212,11 @@ func LookAtOwnCard(game *Game, cardIndex int) (cards.Card, error) {
 	return game.playerCards[game.playerTurn][cardIndex], nil
 }
 
-func LookAtOpponentCard(game *Game, opponentIndex int, cardIndex int) (cards.Card, error) {
+func (game *Game) LookAtOpponentCard(opponentIndex int, cardIndex int) (cards.Card, error) {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if err := game.validateViewAction(lookAtOpponent); err != nil {
+	if err := game.validateViewAction(LookAtOpponent); err != nil {
 		return cards.Card{}, err
 	}
 
@@ -229,11 +231,11 @@ func LookAtOpponentCard(game *Game, opponentIndex int, cardIndex int) (cards.Car
 	return game.playerCards[opponentIndex][cardIndex], nil
 }
 
-func SwapCards(game *Game, opponentIndex int, ownCardIndex int, opponentCardIndex int) error {
+func (game *Game) SwapCards(opponentIndex int, ownCardIndex int, opponentCardIndex int) error {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if err := game.validateViewAction(swap); err != nil {
+	if err := game.validateViewAction(Swap); err != nil {
 		return err
 	}
 
@@ -255,7 +257,7 @@ func SwapCards(game *Game, opponentIndex int, ownCardIndex int, opponentCardInde
 	return nil
 }
 
-func RemoveCard(game *Game, playerReplacing int, playersCardReplacing int, cardIndex int) error {
+func (game *Game) RemoveCard(playerReplacing int, playersCardReplacing int, cardIndex int) error {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
@@ -291,7 +293,7 @@ func RemoveCard(game *Game, playerReplacing int, playersCardReplacing int, cardI
 	// remove card from opponent's hand if player replacing opponent's card and set state to player can give opponent a card of their choice to replace the removed card
 	game.playerCards[playersCardReplacing][cardIndex] = cards.Card{}
 	game.savedGameState = game.gameState
-	game.gameState = removingCard
+	game.gameState = RemovingCard
 	game.replacing = &replaceInfo{
 		playerReplacing:      playerReplacing,
 		playersCardReplacing: playersCardReplacing,
@@ -301,11 +303,11 @@ func RemoveCard(game *Game, playerReplacing int, playersCardReplacing int, cardI
 }
 
 // EndTurn commits a look/swap action and advances to the next player.
-func EndTurn(game *Game) {
+func (game *Game) EndTurn() {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if game.gameState != takingTurn {
+	if game.gameState != TakingTurn {
 		return
 	}
 
@@ -313,39 +315,39 @@ func EndTurn(game *Game) {
 	game.advanceTurn()
 }
 
-func EndGame(game *Game) {
+func (game *Game) EndGame() {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 
-	if game.gameState != waitingForTurn {
+	if game.gameState != WaitingForTurn {
 		return
 	}
 
 	game.playerCalledGame = game.playerTurn
 	game.playerTurn = (game.playerTurn + 1) % game.playerCount
-	game.gameState = waitingForTurn
-	game.turnType = unselected
+	game.gameState = WaitingForTurn
+	game.turnType = Unselected
 }
 
-func GetGameStart(game *Game) bool {
+func (game *Game) GetGameStart() bool {
 	game.mu.RLock()
 	defer game.mu.RUnlock()
-	return game.gameState == gameStart
+	return game.gameState == GameStart
 }
 
-func GetActivePlayer(game *Game) int {
+func (game *Game) GetActivePlayer() int {
 	game.mu.RLock()
 	defer game.mu.RUnlock()
-	return game.playerTurn + 0
+	return game.playerTurn
 }
 
-func GetTopDiscardCard(game *Game) cards.Card {
+func (game *Game) GetTopDiscardCard() cards.Card {
 	game.mu.RLock()
 	defer game.mu.RUnlock()
 	return game.deck.GetTopDiscardCard()
 }
 
-func GetPlayerHand(game *Game, playerIndex int) []cards.Card {
+func (game *Game) GetPlayerHand(playerIndex int) []cards.Card {
 	game.mu.RLock()
 	defer game.mu.RUnlock()
 	if playerIndex < 0 || playerIndex >= game.playerCount {
@@ -356,7 +358,7 @@ func GetPlayerHand(game *Game, playerIndex int) []cards.Card {
 	return hand
 }
 
-func GetAllPlayerHands(game *Game) [][]cards.Card {
+func (game *Game) GetAllPlayerHands() [][]cards.Card {
 	game.mu.RLock()
 	defer game.mu.RUnlock()
 
@@ -368,7 +370,7 @@ func GetAllPlayerHands(game *Game) [][]cards.Card {
 	return hands
 }
 
-func GetActiveCard(game *Game, playerIndex int) cards.Card {
+func (game *Game) GetActiveCard(playerIndex int) cards.Card {
 	game.mu.RLock()
 	defer game.mu.RUnlock()
 	if playerIndex != game.playerTurn {
@@ -377,21 +379,39 @@ func GetActiveCard(game *Game, playerIndex int) cards.Card {
 	return game.activeCard
 }
 
-func getValidTurnType(game *Game) []turnType {
+func (game *Game) GetPlayerTurn() int {
+	game.mu.RLock()
+	defer game.mu.RUnlock()
+	return game.playerTurn
+}
+
+func (game *Game) GetGameState() GameState {
+	game.mu.RLock()
+	defer game.mu.RUnlock()
+	return game.gameState
+}
+
+func (game *Game) GetValidTurnTypes() []TurnType {
+	game.mu.RLock()
+	defer game.mu.RUnlock()
+	return game.validTurnTypes
+}
+
+func (game *Game) getValidTurnType() []TurnType {
 	switch game.activeCard.Rank {
 	case cards.Ace, cards.Two, cards.Three, cards.Four, cards.Five, cards.Six:
-		return []turnType{discard, replace}
+		return []TurnType{Discard, Replace}
 	case cards.Seven, cards.Eight:
-		return []turnType{lookAtSelf, discard, replace}
+		return []TurnType{LookAtSelf, Discard, Replace}
 	case cards.Nine, cards.Ten:
-		return []turnType{lookAtOpponent, discard, replace}
+		return []TurnType{LookAtOpponent, Discard, Replace}
 	case cards.Jack, cards.Queen, cards.King:
 		if game.activeCard.Suit == cards.Hearts || game.activeCard.Suit == cards.Diamonds {
-			return []turnType{discard, replace}
+			return []TurnType{Discard, Replace}
 		} else {
-			return []turnType{swap, discard, replace}
+			return []TurnType{Swap, Discard, Replace}
 		}
 	default:
-		return []turnType{callGame}
+		return []TurnType{CallGame}
 	}
 }

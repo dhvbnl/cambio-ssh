@@ -32,27 +32,40 @@ const (
 )
 
 type cambioKeymap struct {
-	start  key.Binding
-	quit   key.Binding
-	escape key.Binding
+	join           key.Binding
+	start          key.Binding
+	quit           key.Binding
+	escape         key.Binding
+	draw           key.Binding
+	replace        key.Binding
+	discard        key.Binding
+	lookAtSelf     key.Binding
+	lookAtOpponent key.Binding
+	swap           key.Binding
+	cambio         key.Binding
 }
 
 // CambioGameModel represents the Bubble Tea model for the cambio game
 type CambioGameModel struct {
-	game    *cambio.Game
-	state   CambioGameState
-	message string
-	width   int
-	height  int
-	keymap  cambioKeymap
+	game     *cambio.Game
+	state    CambioGameState
+	playerId int
+	message  string
+	width    int
+	height   int
+	keymap   cambioKeymap
 }
 
 // NewCambioGameModel creates a new cambio game model
 func NewCambioGameModel() CambioGameModel {
 	km := cambioKeymap{
-		start: key.NewBinding(
+		join: key.NewBinding(
 			key.WithKeys("enter", "space"),
-			key.WithHelp("enter", "continue"),
+			key.WithHelp("enter", "join game"),
+		),
+		start: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "start game"),
 		),
 		quit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
@@ -62,13 +75,42 @@ func NewCambioGameModel() CambioGameModel {
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "back"),
 		),
+		draw: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "draw card"),
+		),
+		replace: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "replace card 0"),
+		),
+		discard: key.NewBinding(
+			key.WithKeys("x"),
+			key.WithHelp("x", "discard card"),
+		),
+		lookAtSelf: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "look at your cards"),
+		),
+		lookAtOpponent: key.NewBinding(
+			key.WithKeys("o"),
+			key.WithHelp("o", "look at opponent's cards"),
+		),
+		swap: key.NewBinding(
+			key.WithKeys("w"),
+			key.WithHelp("w", "swap a card with opponent"),
+		),
+		cambio: key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "call cambio"),
+		),
 	}
 
 	return CambioGameModel{
-		game:    nil,
-		state:   CambioStateInitial,
-		message: "",
-		keymap:  km,
+		game:     nil,
+		state:    CambioStateInitial,
+		playerId: 0,
+		message:  "",
+		keymap:   km,
 	}
 }
 
@@ -92,13 +134,60 @@ func (m CambioGameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = CambioStateQuit
 			return m, tea.Quit
 
-		case m.state == CambioStateInitial && key.Matches(msg, m.keymap.start):
+		case m.state == CambioStateInitial && key.Matches(msg, m.keymap.join):
 			m.game = cambio.NewGame(2)
 			m.state = CambioStatePlaying
+		case m.state == CambioStatePlaying:
+			m.handleGameplayKey(msg)
 		}
 	}
 
 	return m, nil
+}
+
+func (m *CambioGameModel) handleGameplayKey(msg tea.KeyMsg) {
+	if m.game == nil {
+		return
+	}
+
+	if key.Matches(msg, m.keymap.start) {
+		if m.game.GetGameState() == cambio.GameStart {
+			m.game.StartGame()
+			m.message = ""
+		}
+		return
+	}
+
+	if m.playerId != m.game.GetPlayerTurn() {
+		return
+	}
+
+	if key.Matches(msg, m.keymap.draw) {
+		if m.game.GetGameState() == cambio.WaitingForTurn {
+			m.game.DrawCard()
+			m.message = ""
+		}
+		return
+	}
+
+	if key.Matches(msg, m.keymap.discard) {
+		m.game.SelectTurnType(cambio.Discard)
+		if err := m.game.DiscardCard(); err != nil {
+			m.message = err.Error()
+			return
+		}
+		m.message = ""
+		return
+	}
+
+	if key.Matches(msg, m.keymap.replace) {
+		m.game.SelectTurnType(cambio.Replace)
+		if err := m.game.ReplaceCard(0); err != nil {
+			m.message = err.Error()
+			return
+		}
+		m.message = ""
+	}
 }
 
 // View renders the model
@@ -152,23 +241,23 @@ func (m CambioGameModel) renderPlaying() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(m.renderCards(1))
+	b.WriteString(m.renderCards(m.playerId))
 	b.WriteString("\n\n")
-	b.WriteString("Game initialized! (Full gameplay coming soon...)\n")
+	b.WriteString("Start with ENTER, draw with D, discard with X, or replace card index 0 with R.\n")
 	return b.String()
 }
 
 func (m CambioGameModel) renderCards(currentPlayer int) string {
-	playerCards := cambio.GetAllPlayerHands(m.game)
-	gameStart := cambio.GetGameStart(m.game)
+	playerCards := m.game.GetAllPlayerHands()
+	gameStart := m.game.GetGameStart()
 	if len(playerCards) == 0 {
 		return "No players"
 	}
 
-	if currentPlayer < 1 || currentPlayer > len(playerCards) {
-		currentPlayer = 1
+	if currentPlayer < 0 || currentPlayer >= len(playerCards) {
+		currentPlayer = 0
 	}
-	currentPlayerIdx := currentPlayer - 1
+	currentPlayerIdx := currentPlayer
 
 	topRowHands := make([]string, 0, len(playerCards)-1)
 	relativePlayerNum := 2
@@ -187,13 +276,13 @@ func (m CambioGameModel) renderCards(currentPlayer int) string {
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, topRowHands...)
 	middleRow := m.renderSharedCards(currentPlayer)
-	return lipgloss.JoinVertical(lipgloss.Left, topRow, middleRow, currentPlayerBox)
+	return lipgloss.JoinVertical(lipgloss.Center, topRow, middleRow, currentPlayerBox)
 }
 
 func (m CambioGameModel) renderSharedCards(currentPlayer int) string {
-	activeCard := renderCambioCard(cambio.GetActiveCard(m.game, currentPlayer), true)
+	activeCard := renderCambioCard(m.game.GetActiveCard(currentPlayer), true)
 	deckCard := renderEmptyCambioCard()
-	topDiscardCard := renderCambioCard(cambio.GetTopDiscardCard(m.game), true)
+	topDiscardCard := renderCambioCard(m.game.GetTopDiscardCard(), true)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		lipgloss.NewStyle().PaddingRight(1).Render(lipgloss.JoinVertical(lipgloss.Center, "Deck", deckCard)),
@@ -268,13 +357,12 @@ func (m CambioGameModel) getActiveKeybindings() []key.Binding {
 	switch m.state {
 	case CambioStateInitial:
 		return []key.Binding{
-			m.keymap.start,
+			m.keymap.join,
 			m.keymap.quit,
 		}
 	case CambioStatePlaying:
-		return []key.Binding{
-			m.keymap.quit,
-		}
+		return append([]key.Binding{
+			m.keymap.quit}, m.getGameKeybindings()...)
 	case CambioStateShowingResult:
 		return []key.Binding{
 			m.keymap.start,
@@ -286,5 +374,45 @@ func (m CambioGameModel) getActiveKeybindings() []key.Binding {
 		}
 	default:
 		return []key.Binding{m.keymap.quit}
+	}
+}
+
+func (m CambioGameModel) getGameKeybindings() []key.Binding {
+	gameState := m.game.GetGameState()
+	if m.playerId != m.game.GetPlayerTurn() {
+		// if it's not the player's turn, only allow quit
+		return []key.Binding{m.keymap.quit}
+	}
+	switch gameState {
+	case cambio.GameStart:
+		return []key.Binding{
+			m.keymap.start,
+		}
+	case cambio.WaitingForTurn:
+		return []key.Binding{
+			m.keymap.draw,
+		}
+	case cambio.TakingTurn:
+		var bindings []key.Binding
+		validTurnType := m.game.GetValidTurnTypes()
+		for _, turnType := range validTurnType {
+			switch turnType {
+			case cambio.Discard:
+				bindings = append(bindings, m.keymap.discard)
+			case cambio.Replace:
+				bindings = append(bindings, m.keymap.replace)
+			case cambio.LookAtSelf:
+				bindings = append(bindings, m.keymap.lookAtSelf)
+			case cambio.LookAtOpponent:
+				bindings = append(bindings, m.keymap.lookAtOpponent)
+			case cambio.Swap:
+				bindings = append(bindings, m.keymap.swap)
+			case cambio.CallGame:
+				bindings = append(bindings, m.keymap.cambio)
+			}
+		}
+		return append(bindings, m.keymap.quit)
+	default:
+		return []key.Binding{}
 	}
 }
