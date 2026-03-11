@@ -37,6 +37,8 @@ func (m Model) renderCards(currentPlayer int) string {
 		return "No players"
 	}
 
+	peeking := m.isPeeking()
+
 	if currentPlayer < 0 || currentPlayer >= len(playerHands) {
 		currentPlayer = 0
 	}
@@ -57,7 +59,7 @@ func (m Model) renderCards(currentPlayer int) string {
 		if targetedPlayer {
 			targetedSelectedCard = m.selectedCard
 		}
-		topRowHands = append(topRowHands, renderPlayerHandBox(title, playerHands[idx], false, false, m.state, m.peekActive, targetedPlayer, targetedSelectedCard, highlightedIndex))
+		topRowHands = append(topRowHands, renderPlayerHandBox(title, playerHands[idx], false, false, m.state, peeking, targetedPlayer, targetedSelectedCard, highlightedIndex))
 		relativeNum++
 	}
 
@@ -72,7 +74,7 @@ func (m Model) renderCards(currentPlayer int) string {
 		m.game.GetGameStart(),
 		false,
 		m.state,
-		m.peekActive,
+		peeking,
 		false,
 		m.selectedCard,
 		yourHighlightedIndex,
@@ -214,6 +216,8 @@ func (m Model) renderPlayAgain() string {
 }
 
 func (m Model) getActiveKeybindings() []key.Binding {
+	peeking := m.isPeeking()
+
 	switch m.state {
 	case StateInitial:
 		return []key.Binding{m.keymap.join, m.keymap.quit}
@@ -222,12 +226,12 @@ func (m Model) getActiveKeybindings() []key.Binding {
 	case StateReplacingCard:
 		return append([]key.Binding{m.keymap.escape, m.keymap.replace}, m.getSelectableCardBindings(m.playerID)...)
 	case StateLookingAtOwnCard:
-		if m.peekActive {
+		if peeking {
 			return []key.Binding{m.keymap.escape, m.keymap.lookAtSelf}
 		}
 		return append([]key.Binding{m.keymap.escape, m.keymap.lookAtSelf}, m.getSelectableCardBindings(m.playerID)...)
 	case StateLookingAtOpponentCard:
-		if m.peekActive {
+		if peeking {
 			return []key.Binding{m.keymap.escape, m.keymap.lookAtOpponent}
 		}
 		bindings := []key.Binding{m.keymap.escape, m.keymap.left, m.keymap.right, m.keymap.lookAtOpponent}

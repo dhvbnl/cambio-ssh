@@ -61,7 +61,7 @@ func (m *Model) handleGameplayKey(msg tea.KeyMsg) {
 		m.selectedOpponent = m.firstOpponentIndex()
 		m.state = StateLookingAtOpponentCard
 		if m.selectedOpponent >= 0 {
-			m.message = fmt.Sprintf("Player %d selected. Use left/right to switch opponents, choose a card, then press o.", relativePlayerNumber(m.playerID, m.selectedOpponent, len(m.game.GetAllPlayerHands())))
+			m.message = fmt.Sprintf("Player %d selected. Use left/right to switch opponents, choose a card, then press o.", relativePlayerNumber(m.playerID, m.selectedOpponent, m.playerCount()))
 		}
 	}
 }
@@ -112,7 +112,7 @@ func (m *Model) handleLookOwnCardKey(msg tea.KeyMsg) {
 	}
 
 	if key.Matches(msg, m.keymap.lookAtSelf) {
-		if m.peekActive {
+		if m.isPeeking() {
 			m.finishOwnCardPeek()
 			return
 		}
@@ -129,12 +129,11 @@ func (m *Model) handleLookOwnCardKey(msg tea.KeyMsg) {
 			return
 		}
 
-		m.peekActive = true
 		m.message = fmt.Sprintf("Looking at card %d: %s. Press s again to continue.", m.selectedCard+1, card.String())
 		return
 	}
 
-	if m.peekActive {
+	if m.isPeeking() {
 		return
 	}
 
@@ -167,7 +166,7 @@ func (m *Model) handleLookOpponentCardKey(msg tea.KeyMsg) {
 	}
 
 	if key.Matches(msg, m.keymap.lookAtOpponent) {
-		if m.peekActive {
+		if m.isPeeking() {
 			m.finishOpponentCardPeek()
 			return
 		}
@@ -189,12 +188,11 @@ func (m *Model) handleLookOpponentCardKey(msg tea.KeyMsg) {
 			return
 		}
 
-		m.peekActive = true
-		m.message = fmt.Sprintf("Looking at Player %d card %d: %s. Press o again to continue.", relativePlayerNumber(m.playerID, m.selectedOpponent, len(m.game.GetAllPlayerHands())), m.selectedCard+1, card.String())
+		m.message = fmt.Sprintf("Looking at Player %d card %d: %s. Press o again to continue.", relativePlayerNumber(m.playerID, m.selectedOpponent, m.playerCount()), m.selectedCard+1, card.String())
 		return
 	}
 
-	if m.peekActive {
+	if m.isPeeking() {
 		return
 	}
 
@@ -222,7 +220,7 @@ func (m *Model) handleLookOpponentCardKey(msg tea.KeyMsg) {
 	}
 
 	m.selectedCard = selected
-	m.message = fmt.Sprintf("Player %d card %d selected. Press o to peek at it.", relativePlayerNumber(m.playerID, m.selectedOpponent, len(m.game.GetAllPlayerHands())), m.selectedCard+1)
+	m.message = fmt.Sprintf("Player %d card %d selected. Press o to peek at it.", relativePlayerNumber(m.playerID, m.selectedOpponent, m.playerCount()), m.selectedCard+1)
 }
 
 func (m *Model) finishOpponentCardPeek() {
@@ -235,7 +233,7 @@ func (m *Model) firstOpponentIndex() int {
 	if m.game == nil {
 		return -1
 	}
-	playerCount := len(m.game.GetAllPlayerHands())
+	playerCount := m.playerCount()
 	if playerCount <= 1 {
 		return -1
 	}
@@ -247,7 +245,7 @@ func (m *Model) shiftSelectedOpponent(delta int) {
 		return
 	}
 
-	playerCount := len(m.game.GetAllPlayerHands())
+	playerCount := m.playerCount()
 	if playerCount <= 1 {
 		return
 	}

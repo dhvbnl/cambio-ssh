@@ -26,7 +26,6 @@ type Model struct {
 	state            State
 	selectedCard     int
 	selectedOpponent int
-	peekActive       bool
 	playerID         int
 	message          string
 	width            int
@@ -67,7 +66,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.state == StateLookingAtOwnCard {
-				if m.peekActive {
+				if m.isPeeking() {
 					m.finishOwnCardPeek()
 					return m, nil
 				}
@@ -76,7 +75,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.state == StateLookingAtOpponentCard {
-				if m.peekActive {
+				if m.isPeeking() {
 					m.finishOpponentCardPeek()
 					return m, nil
 				}
@@ -145,6 +144,26 @@ func (m Model) renderTitle() string {
 func (m *Model) resetSelectionState() {
 	m.selectedCard = -1
 	m.selectedOpponent = -1
-	m.peekActive = false
 	m.message = ""
+}
+
+func (m Model) isPeeking() bool {
+	if m.game == nil {
+		return false
+	}
+
+	_, _, _, canSeeFace, revealedActive := m.game.GetRevealedCard(m.playerID)
+	if !revealedActive || !canSeeFace {
+		return false
+	}
+
+	return m.state == StateLookingAtOwnCard || m.state == StateLookingAtOpponentCard
+}
+
+func (m Model) playerCount() int {
+	if m.game == nil {
+		return 0
+	}
+
+	return len(m.game.GetAllPlayerHands())
 }
