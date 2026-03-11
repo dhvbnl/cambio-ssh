@@ -13,6 +13,8 @@ type keymap struct {
 	start          key.Binding
 	quit           key.Binding
 	escape         key.Binding
+	left           key.Binding
+	right          key.Binding
 	draw           key.Binding
 	replace        key.Binding
 	discard        key.Binding
@@ -29,6 +31,8 @@ func newKeymap() keymap {
 		start:          key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "start game")),
 		quit:           key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 		escape:         key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+		left:           key.NewBinding(key.WithKeys("left"), key.WithHelp("left", "prev opponent")),
+		right:          key.NewBinding(key.WithKeys("right"), key.WithHelp("right", "next opponent")),
 		draw:           key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "draw card")),
 		replace:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "replace / confirm")),
 		discard:        key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "discard card")),
@@ -38,7 +42,7 @@ func newKeymap() keymap {
 		cambio:         key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "call cambio")),
 	}
 
-	for i := 0; i < len(km.cardKeys); i++ {
+	for i := range len(km.cardKeys) {
 		n := i + 1
 		k := fmt.Sprintf("%d", n)
 		km.cardKeys[i] = key.NewBinding(key.WithKeys(k), key.WithHelp(k, fmt.Sprintf("select card %d", n)))

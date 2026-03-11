@@ -3,9 +3,10 @@ package cambioui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	boxStyle     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1)
-	messageStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+	titleStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+	boxStyle         = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1)
+	selectedBoxStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(lipgloss.Color("10")).Padding(0, 1)
+	messageStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
 
 	cardStyle                = newCardStyle(lipgloss.RoundedBorder(), "8")
 	candidateCardStyle       = newCardStyle(lipgloss.DoubleBorder(), "8")

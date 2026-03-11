@@ -2,7 +2,6 @@ package cambio
 
 import (
 	"errors"
-	"log"
 	"slices"
 	"sync"
 
@@ -173,7 +172,6 @@ func (game *Game) DrawCard() {
 	game.gameState = TakingTurn
 	game.turnType = Unselected
 	game.validTurnTypes = game.getValidTurnType()
-	log.Printf("Player %d drew card: %s of %s", game.playerTurn+1, card.Rank, card.Suit)
 }
 
 func (game *Game) SelectTurnType(turn TurnType) {

@@ -52,7 +52,12 @@ func (m Model) renderCards(currentPlayer int) string {
 		if revealedActive && revealedPlayer == idx {
 			highlightedIndex = revealedIndex
 		}
-		topRowHands = append(topRowHands, renderPlayerHandBox(title, playerHands[idx], false, false, StatePlaying, false, -1, highlightedIndex))
+		targetedPlayer := m.state == StateLookingAtOpponentCard && m.selectedOpponent == idx
+		targetedSelectedCard := -1
+		if targetedPlayer {
+			targetedSelectedCard = m.selectedCard
+		}
+		topRowHands = append(topRowHands, renderPlayerHandBox(title, playerHands[idx], false, false, m.state, m.peekActive, targetedPlayer, targetedSelectedCard, highlightedIndex))
 		relativeNum++
 	}
 
@@ -68,6 +73,7 @@ func (m Model) renderCards(currentPlayer int) string {
 		false,
 		m.state,
 		m.peekActive,
+		false,
 		m.selectedCard,
 		yourHighlightedIndex,
 	)
@@ -109,18 +115,18 @@ func (m Model) renderSharedCards(currentPlayer int) string {
 	)
 }
 
-func renderPlayerHandBox(title string, hand []cards.Card, gameStart bool, faceUp bool, mode State, peekActive bool, selectedIndex int, revealedIndex int) string {
+func renderPlayerHandBox(title string, hand []cards.Card, gameStart bool, faceUp bool, mode State, peekActive bool, targetedPlayer bool, selectedIndex int, revealedIndex int) string {
 	handDisplay := "No cards"
 	if len(hand) > 0 {
 		columns := make([]string, 0, (len(hand)+1)/2)
 		for topIdx := 0; topIdx < len(hand); topIdx += 2 {
 			showFace := faceUp || gameStart
-			topStyle := selectableCardStyle(mode, peekActive, topIdx, selectedIndex, revealedIndex, hand[topIdx])
+			topStyle := selectableCardStyle(mode, peekActive, targetedPlayer, topIdx, selectedIndex, revealedIndex, hand[topIdx])
 			topCard := renderCard(hand[topIdx], false, topIdx+1, topStyle)
 
 			bottomCard := renderEmptyCard()
 			if bottomIdx := topIdx + 1; bottomIdx < len(hand) {
-				bottomStyle := selectableCardStyle(mode, peekActive, bottomIdx, selectedIndex, revealedIndex, hand[bottomIdx])
+				bottomStyle := selectableCardStyle(mode, peekActive, targetedPlayer, bottomIdx, selectedIndex, revealedIndex, hand[bottomIdx])
 				bottomCard = renderCard(hand[bottomIdx], showFace, bottomIdx+1, bottomStyle)
 			}
 
@@ -130,10 +136,15 @@ func renderPlayerHandBox(title string, hand []cards.Card, gameStart bool, faceUp
 		handDisplay = lipgloss.JoinHorizontal(lipgloss.Top, columns...)
 	}
 
-	return boxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, title, handDisplay))
+	containerStyle := boxStyle
+	if targetedPlayer {
+		containerStyle = selectedBoxStyle
+	}
+
+	return containerStyle.Render(lipgloss.JoinVertical(lipgloss.Left, title, handDisplay))
 }
 
-func selectableCardStyle(mode State, peekActive bool, idx int, selectedIndex int, revealedIndex int, card cards.Card) lipgloss.Style {
+func selectableCardStyle(mode State, peekActive bool, targetedPlayer bool, idx int, selectedIndex int, revealedIndex int, card cards.Card) lipgloss.Style {
 	if card == (cards.Card{}) {
 		return cardStyle
 	}
@@ -149,6 +160,17 @@ func selectableCardStyle(mode State, peekActive bool, idx int, selectedIndex int
 		}
 		return candidateCardStyle
 	case StateLookingAtOwnCard:
+		if peekActive {
+			return cardStyle
+		}
+		if idx == selectedIndex {
+			return selectedLookCardStyle
+		}
+		return candidateCardStyle
+	case StateLookingAtOpponentCard:
+		if !targetedPlayer {
+			return cardStyle
+		}
 		if peekActive {
 			return cardStyle
 		}
@@ -204,6 +226,15 @@ func (m Model) getActiveKeybindings() []key.Binding {
 			return []key.Binding{m.keymap.escape, m.keymap.lookAtSelf}
 		}
 		return append([]key.Binding{m.keymap.escape, m.keymap.lookAtSelf}, m.getSelectableCardBindings(m.playerID)...)
+	case StateLookingAtOpponentCard:
+		if m.peekActive {
+			return []key.Binding{m.keymap.escape, m.keymap.lookAtOpponent}
+		}
+		bindings := []key.Binding{m.keymap.escape, m.keymap.left, m.keymap.right, m.keymap.lookAtOpponent}
+		if m.selectedOpponent >= 0 {
+			bindings = append(bindings, m.getSelectableCardBindings(m.selectedOpponent)...)
+		}
+		return bindings
 	case StateShowingResult:
 		return []key.Binding{m.keymap.start}
 	case StatePlayAgain:

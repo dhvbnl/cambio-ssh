@@ -15,31 +15,34 @@ const (
 	StatePlaying
 	StateReplacingCard
 	StateLookingAtOwnCard
+	StateLookingAtOpponentCard
 	StateShowingResult
 	StatePlayAgain
 	StateQuit
 )
 
 type Model struct {
-	game         *internalcambio.Game
-	state        State
-	selectedCard int
-	peekActive   bool
-	playerID     int
-	message      string
-	width        int
-	height       int
-	keymap       keymap
-	onBack       tea.Cmd
+	game             *internalcambio.Game
+	state            State
+	selectedCard     int
+	selectedOpponent int
+	peekActive       bool
+	playerID         int
+	message          string
+	width            int
+	height           int
+	keymap           keymap
+	onBack           tea.Cmd
 }
 
 func NewModel(onBack tea.Cmd) Model {
 	return Model{
-		state:        StateInitial,
-		selectedCard: -1,
-		playerID:     0,
-		keymap:       newKeymap(),
-		onBack:       onBack,
+		state:            StateInitial,
+		selectedCard:     -1,
+		selectedOpponent: -1,
+		playerID:         0,
+		keymap:           newKeymap(),
+		onBack:           onBack,
 	}
 }
 
@@ -59,10 +62,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case key.Matches(msg, m.keymap.escape):
 			if m.state == StateReplacingCard {
-				m.selectedCard = -1
-				m.peekActive = false
+				m.resetSelectionState()
 				m.state = StatePlaying
-				m.message = ""
 				return m, nil
 			}
 			if m.state == StateLookingAtOwnCard {
@@ -70,10 +71,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.finishOwnCardPeek()
 					return m, nil
 				}
-				m.selectedCard = -1
-				m.peekActive = false
+				m.resetSelectionState()
 				m.state = StatePlaying
-				m.message = ""
+				return m, nil
+			}
+			if m.state == StateLookingAtOpponentCard {
+				if m.peekActive {
+					m.finishOpponentCardPeek()
+					return m, nil
+				}
+				m.resetSelectionState()
+				m.state = StatePlaying
 				return m, nil
 			}
 			if m.onBack != nil {
@@ -94,6 +102,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.state == StateLookingAtOwnCard:
 			m.handleLookOwnCardKey(msg)
 			return m, nil
+		case m.state == StateLookingAtOpponentCard:
+			m.handleLookOpponentCardKey(msg)
+			return m, nil
 		}
 	}
 
@@ -108,7 +119,7 @@ func (m Model) View() string {
 	switch m.state {
 	case StateInitial:
 		body.WriteString(m.renderInitial())
-	case StatePlaying, StateReplacingCard, StateLookingAtOwnCard:
+	case StatePlaying, StateReplacingCard, StateLookingAtOwnCard, StateLookingAtOpponentCard:
 		body.WriteString(m.renderPlaying())
 	case StateShowingResult:
 		body.WriteString(m.renderResult())
@@ -129,4 +140,11 @@ func (m Model) View() string {
 
 func (m Model) renderTitle() string {
 	return titleStyle.Render("CAMBIO - 2 PLAYER")
+}
+
+func (m *Model) resetSelectionState() {
+	m.selectedCard = -1
+	m.selectedOpponent = -1
+	m.peekActive = false
+	m.message = ""
 }
