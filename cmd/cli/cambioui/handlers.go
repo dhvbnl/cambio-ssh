@@ -16,8 +16,22 @@ func (m *Model) handleGameplayKey(msg tea.KeyMsg) {
 
 	if key.Matches(msg, m.keymap.start) {
 		if m.game.GetGameState() == internalcambio.GameStart {
-			m.game.StartGame()
-			m.message = ""
+			if m.lobbyID == "" {
+				m.game.StartGame()
+				m.message = ""
+				return
+			}
+
+			bothReady, err := sharedLobbies.markReady(m.lobbyID, m.clientID)
+			if err != nil {
+				m.message = err.Error()
+				return
+			}
+			if bothReady {
+				m.message = "Both players ready. Game started."
+			} else {
+				m.message = "Ready confirmed. Waiting for the other player to press ENTER."
+			}
 		}
 		return
 	}
@@ -52,12 +66,23 @@ func (m *Model) handleGameplayKey(msg tea.KeyMsg) {
 
 	if key.Matches(msg, m.keymap.lookAtSelf) {
 		m.resetSelectionState()
+		m.game.SelectTurnType(internalcambio.LookAtSelf)
+		if err := m.game.CommitPowerCard(internalcambio.LookAtSelf); err != nil {
+			m.message = err.Error()
+			return
+		}
 		m.state = StateLookingAtOwnCard
+		m.message = "Power card committed. Select your card to peek."
 		return
 	}
 
 	if key.Matches(msg, m.keymap.lookAtOpponent) {
 		m.resetSelectionState()
+		m.game.SelectTurnType(internalcambio.LookAtOpponent)
+		if err := m.game.CommitPowerCard(internalcambio.LookAtOpponent); err != nil {
+			m.message = err.Error()
+			return
+		}
 		m.selectedOpponent = m.firstOpponentIndex()
 		m.state = StateLookingAtOpponentCard
 		if m.selectedOpponent >= 0 {
@@ -122,7 +147,6 @@ func (m *Model) handleLookOwnCardKey(msg tea.KeyMsg) {
 			return
 		}
 
-		m.game.SelectTurnType(internalcambio.LookAtSelf)
 		card, err := m.game.LookAtOwnCard(m.selectedCard)
 		if err != nil {
 			m.message = err.Error()
@@ -181,7 +205,6 @@ func (m *Model) handleLookOpponentCardKey(msg tea.KeyMsg) {
 			return
 		}
 
-		m.game.SelectTurnType(internalcambio.LookAtOpponent)
 		card, err := m.game.LookAtOpponentCard(m.selectedOpponent, m.selectedCard)
 		if err != nil {
 			m.message = err.Error()

@@ -39,7 +39,7 @@ func NewRootModel(username string, sharedChat *chat.Chat) RootModel {
 	factories := map[screenID]func() tea.Model{
 		screenHome:      func() tea.Model { return NewMenuModel() },
 		screenBlackjack: func() tea.Model { return NewGameModel() },
-		screenCambio:    func() tea.Model { return NewCambioGameModel() },
+		screenCambio:    func() tea.Model { return NewCambioGameModel(username) },
 		screenChat:      func() tea.Model { return NewChatModel(sharedChat, username) },
 	}
 

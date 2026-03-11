@@ -13,15 +13,19 @@ import (
 func (m Model) renderInitial() string {
 	var b strings.Builder
 	b.WriteString("Welcome to Cambio!\n\n")
-	b.WriteString("Press ENTER or SPACE to start a new game\n")
-	b.WriteString("Press CTRL+C to quit\n\n")
-	b.WriteString("How to play:\n")
-	b.WriteString("- Goal: Have the lowest total card value at the end.\n")
-	b.WriteString("- Each player starts with 4 face-down cards.\n")
-	b.WriteString("- On your turn, draw a card and replace or discard it.\n")
-	b.WriteString("- Special cards allow peeking and swapping effects.\n")
-	b.WriteString("- Call Cambio when you think you have the lowest score.\n")
+	b.WriteString("Create a new game or join an open game.\n\n")
+	b.WriteString("- Press c to create your own game\n")
+	b.WriteString("- Press j to view joinable games\n")
+	b.WriteString("- Press esc to go back\n")
 	return b.String()
+}
+
+func (m Model) renderWaitingForJoin() string {
+	name := m.username
+	if name == "" {
+		name = "Your"
+	}
+	return fmt.Sprintf("%s's game\n\nWaiting for someone to join...", name)
 }
 
 func (m Model) renderPlaying() string {
@@ -46,10 +50,10 @@ func (m Model) renderCards(currentPlayer int) string {
 	revealedPlayer, revealedIndex, _, _, revealedActive := m.game.GetRevealedCard(currentPlayer)
 
 	topRowHands := make([]string, 0, len(playerHands)-1)
-	relativeNum := 2
 	for offset := 1; offset < len(playerHands); offset++ {
 		idx := (currentPlayer + offset) % len(playerHands)
-		title := fmt.Sprintf("Player %d Hand", relativeNum)
+		playerName := m.playerName(idx)
+		title := fmt.Sprintf("%s's Hand", playerName)
 		highlightedIndex := -1
 		if revealedActive && revealedPlayer == idx {
 			highlightedIndex = revealedIndex
@@ -59,8 +63,7 @@ func (m Model) renderCards(currentPlayer int) string {
 		if targetedPlayer {
 			targetedSelectedCard = m.selectedCard
 		}
-		topRowHands = append(topRowHands, renderPlayerHandBox(title, playerHands[idx], false, false, m.state, peeking, targetedPlayer, targetedSelectedCard, highlightedIndex))
-		relativeNum++
+		topRowHands = append(topRowHands, renderPlayerHandBox(title, playerHands[idx], false, false, true, m.state, peeking, targetedPlayer, targetedSelectedCard, highlightedIndex))
 	}
 
 	yourHighlightedIndex := -1
@@ -72,6 +75,7 @@ func (m Model) renderCards(currentPlayer int) string {
 		"Your Hand",
 		playerHands[currentPlayer],
 		m.game.GetGameStart(),
+		false,
 		false,
 		m.state,
 		peeking,
@@ -99,7 +103,8 @@ func (m Model) renderSharedCards(currentPlayer int) string {
 	discard := renderCard(m.game.GetTopDiscardCard(), true, -1, cardStyle)
 	revealed := renderEmptyCard()
 	_, _, revealedCard, canSeeFace, revealedActive := m.game.GetRevealedCard(currentPlayer)
-	if revealedActive {
+	_, _, _, isPublicReveal, _ := m.game.GetRevealedCard(-1)
+	if revealedActive && !isPublicReveal {
 		if canSeeFace {
 			revealed = renderCard(revealedCard, true, -1, cardStyle)
 		} else {
@@ -117,19 +122,36 @@ func (m Model) renderSharedCards(currentPlayer int) string {
 	)
 }
 
-func renderPlayerHandBox(title string, hand []cards.Card, gameStart bool, faceUp bool, mode State, peekActive bool, targetedPlayer bool, selectedIndex int, revealedIndex int) string {
+func renderPlayerHandBox(title string, hand []cards.Card, gameStart bool, faceUp bool, invertVertical bool, mode State, peekActive bool, targetedPlayer bool, selectedIndex int, revealedIndex int) string {
 	handDisplay := "No cards"
 	if len(hand) > 0 {
 		columns := make([]string, 0, (len(hand)+1)/2)
 		for topIdx := 0; topIdx < len(hand); topIdx += 2 {
 			showFace := faceUp || gameStart
-			topStyle := selectableCardStyle(mode, peekActive, targetedPlayer, topIdx, selectedIndex, revealedIndex, hand[topIdx])
-			topCard := renderCard(hand[topIdx], false, topIdx+1, topStyle)
-
+			topCard := renderEmptyCard()
 			bottomCard := renderEmptyCard()
-			if bottomIdx := topIdx + 1; bottomIdx < len(hand) {
-				bottomStyle := selectableCardStyle(mode, peekActive, targetedPlayer, bottomIdx, selectedIndex, revealedIndex, hand[bottomIdx])
-				bottomCard = renderCard(hand[bottomIdx], showFace, bottomIdx+1, bottomStyle)
+
+			renderAtTop := func(cardIdx int) {
+				style := selectableCardStyle(mode, peekActive, targetedPlayer, cardIdx, selectedIndex, revealedIndex, hand[cardIdx])
+				topCard = renderCard(hand[cardIdx], false, cardIdx+1, style)
+			}
+
+			renderAtBottom := func(cardIdx int) {
+				style := selectableCardStyle(mode, peekActive, targetedPlayer, cardIdx, selectedIndex, revealedIndex, hand[cardIdx])
+				bottomCard = renderCard(hand[cardIdx], showFace, cardIdx+1, style)
+			}
+
+			bottomIdx := topIdx + 1
+			if !invertVertical {
+				renderAtTop(topIdx)
+				if bottomIdx < len(hand) {
+					renderAtBottom(bottomIdx)
+				}
+			} else {
+				renderAtBottom(topIdx)
+				if bottomIdx < len(hand) {
+					renderAtTop(bottomIdx)
+				}
 			}
 
 			column := lipgloss.NewStyle().PaddingRight(1).Render(lipgloss.JoinVertical(lipgloss.Left, topCard, bottomCard))
@@ -220,7 +242,11 @@ func (m Model) getActiveKeybindings() []key.Binding {
 
 	switch m.state {
 	case StateInitial:
-		return []key.Binding{m.keymap.join, m.keymap.quit}
+		return []key.Binding{m.keymap.createGame, m.keymap.join, m.keymap.escape, m.keymap.quit}
+	case StateJoinGameList:
+		return []key.Binding{m.keymap.escape, m.keymap.start, m.keymap.quit}
+	case StateWaitingForJoin:
+		return []key.Binding{m.keymap.escape, m.keymap.start, m.keymap.quit}
 	case StatePlaying:
 		return m.getGameKeybindings()
 	case StateReplacingCard:

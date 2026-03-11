@@ -9,6 +9,7 @@ import (
 )
 
 type keymap struct {
+	createGame     key.Binding
 	join           key.Binding
 	start          key.Binding
 	quit           key.Binding
@@ -27,7 +28,8 @@ type keymap struct {
 
 func newKeymap() keymap {
 	km := keymap{
-		join:           key.NewBinding(key.WithKeys("enter", "space"), key.WithHelp("enter", "join game")),
+		createGame:     key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "create game")),
+		join:           key.NewBinding(key.WithKeys("j"), key.WithHelp("j", "join game")),
 		start:          key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "start game")),
 		quit:           key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 		escape:         key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),

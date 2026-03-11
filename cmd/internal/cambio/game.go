@@ -184,6 +184,20 @@ func (game *Game) SelectTurnType(turn TurnType) {
 	game.turnType = turn
 }
 
+// CommitPowerCard discards the drawn active card after a non-consuming power
+// turn type is selected so players cannot reverse that decision.
+func (game *Game) CommitPowerCard(expectedTurnType TurnType) error {
+	game.mu.Lock()
+	defer game.mu.Unlock()
+
+	if err := game.validateViewAction(expectedTurnType); err != nil {
+		return err
+	}
+
+	game.clearActiveCard(true)
+	return nil
+}
+
 func (game *Game) DiscardCard() error {
 	game.mu.Lock()
 	defer game.mu.Unlock()
@@ -211,6 +225,9 @@ func (game *Game) ReplaceCard(cardIndex int) error {
 
 	replacedCard := game.playerCards[game.playerTurn][cardIndex]
 	game.playerCards[game.playerTurn][cardIndex] = game.activeCard
+	// Keep a public marker of the replaced hand slot so other players can see
+	// which position was swapped during the previous turn.
+	game.setRevealedCard(game.playerTurn, cardIndex, -1, game.playerCards[game.playerTurn][cardIndex])
 	game.deck.Discard(replacedCard)
 	game.clearActiveCard(false)
 	game.advanceTurn()
@@ -412,7 +429,8 @@ func (game *Game) GetRevealedCard(viewerIndex int) (int, int, cards.Card, bool, 
 		return -1, -1, cards.Card{}, false, false
 	}
 
-	canSeeFace := viewerIndex == game.revealed.viewerIndex
+	// viewerIndex == -1 means the reveal is public and visible to all players.
+	canSeeFace := game.revealed.viewerIndex == -1 || viewerIndex == game.revealed.viewerIndex
 	return game.revealed.playerIndex, game.revealed.cardIndex, game.revealed.card, canSeeFace, true
 }
 
