@@ -41,6 +41,13 @@ type replaceInfo struct {
 	cardIndex            int
 }
 
+type revealedCard struct {
+	playerIndex int
+	cardIndex   int
+	viewerIndex int
+	card        cards.Card
+}
+
 type Game struct {
 	mu               sync.RWMutex
 	playerCount      int // always 2 for now, but could be extended in the future
@@ -54,6 +61,7 @@ type Game struct {
 	gameState        GameState      // the current state of the game
 	savedGameState   GameState      // used for when a player removes card so we can return to the previous game state after removal is done
 	replacing        *replaceInfo   // information about the card being replaced
+	revealed         *revealedCard  // the most recently revealed card, kept until the next draw
 }
 
 func NewGame(playerCount int) *Game {
@@ -87,6 +95,19 @@ func (game *Game) clearActiveCard(discard bool) {
 		game.deck.Discard(game.activeCard)
 	}
 	game.activeCard = cards.Card{}
+}
+
+func (game *Game) clearRevealedCard() {
+	game.revealed = nil
+}
+
+func (game *Game) setRevealedCard(playerIndex int, cardIndex int, viewerIndex int, card cards.Card) {
+	game.revealed = &revealedCard{
+		playerIndex: playerIndex,
+		cardIndex:   cardIndex,
+		viewerIndex: viewerIndex,
+		card:        card,
+	}
 }
 
 func (game *Game) advanceTurn() {
@@ -146,6 +167,7 @@ func (game *Game) DrawCard() {
 	if game.gameState != WaitingForTurn {
 		return
 	}
+	game.clearRevealedCard()
 	card := game.deck.DrawWithReshuffle()
 	game.activeCard = card
 	game.gameState = TakingTurn
@@ -209,7 +231,9 @@ func (game *Game) LookAtOwnCard(cardIndex int) (cards.Card, error) {
 		return cards.Card{}, errors.New("invalid card index")
 	}
 
-	return game.playerCards[game.playerTurn][cardIndex], nil
+	card := game.playerCards[game.playerTurn][cardIndex]
+	game.setRevealedCard(game.playerTurn, cardIndex, game.playerTurn, card)
+	return card, nil
 }
 
 func (game *Game) LookAtOpponentCard(opponentIndex int, cardIndex int) (cards.Card, error) {
@@ -228,7 +252,9 @@ func (game *Game) LookAtOpponentCard(opponentIndex int, cardIndex int) (cards.Ca
 		return cards.Card{}, errors.New("invalid card index")
 	}
 
-	return game.playerCards[opponentIndex][cardIndex], nil
+	card := game.playerCards[opponentIndex][cardIndex]
+	game.setRevealedCard(opponentIndex, cardIndex, game.playerTurn, card)
+	return card, nil
 }
 
 func (game *Game) SwapCards(opponentIndex int, ownCardIndex int, opponentCardIndex int) error {
@@ -311,6 +337,7 @@ func (game *Game) EndTurn() {
 		return
 	}
 
+	game.clearRevealedCard()
 	game.clearActiveCard(true)
 	game.advanceTurn()
 }
@@ -377,6 +404,18 @@ func (game *Game) GetActiveCard(playerIndex int) cards.Card {
 		return cards.Card{}
 	}
 	return game.activeCard
+}
+
+func (game *Game) GetRevealedCard(viewerIndex int) (int, int, cards.Card, bool, bool) {
+	game.mu.RLock()
+	defer game.mu.RUnlock()
+
+	if game.revealed == nil {
+		return -1, -1, cards.Card{}, false, false
+	}
+
+	canSeeFace := viewerIndex == game.revealed.viewerIndex
+	return game.revealed.playerIndex, game.revealed.cardIndex, game.revealed.card, canSeeFace, true
 }
 
 func (game *Game) GetPlayerTurn() int {
